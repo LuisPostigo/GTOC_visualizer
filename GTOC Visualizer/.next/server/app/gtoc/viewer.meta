@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/gtoc/layout,_N_T_/gtoc/viewer/layout,_N_T_/gtoc/viewer/page,_N_T_/gtoc/viewer"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/gtoc/viewer/__PAGE__",
+    "/gtoc/viewer",
+    "/gtoc",
+    "/_index"
+  ]
+}
