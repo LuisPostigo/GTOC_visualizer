@@ -2,7 +2,7 @@
 
 ## Download/Install
 
-Navigate to the "downloads" folder. Select either the windows/linux installer, or the MacOS one.
+Navigate to the "download" folder. Select either the windows/linux installer, or the MacOS one.
 
 ## Requirements
 
