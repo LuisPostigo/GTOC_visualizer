@@ -6,18 +6,13 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import type { Body } from "@/components/gtoc/utils/dataLoader";
 import { JD_EPOCH_0 } from "@/components/gtoc/utils/constants";
+import { usePlanetStore } from "@/components/gtoc/stores/planetStore";
 
-/**
- * Builds rotation matrix from perifocal (PQW) to inertial coordinates given Ω, i, ω [rad].
- * R = Rz(Ω) * Rx(i) * Rz(ω)
- */
+/* ---------- Rotation Matrix ---------- */
 function pqwToIJK(Ω: number, i: number, ω: number) {
-  const cO = Math.cos(Ω),
-    sO = Math.sin(Ω);
-  const ci = Math.cos(i),
-    si = Math.sin(i);
-  const cw = Math.cos(ω),
-    sw = Math.sin(ω);
+  const cO = Math.cos(Ω), sO = Math.sin(Ω);
+  const ci = Math.cos(i), si = Math.sin(i);
+  const cw = Math.cos(ω), sw = Math.sin(ω);
 
   return new THREE.Matrix3().set(
     cO * cw - sO * sw * ci,
@@ -32,9 +27,7 @@ function pqwToIJK(Ω: number, i: number, ω: number) {
   );
 }
 
-/**
- * Solves Kepler’s equation M = E − e·sinE for 0 ≤ e < 1 using fixed-point iteration.
- */
+/* ---------- Kepler Solver ---------- */
 function solveE(M: number, e: number) {
   const Mp = Math.atan2(Math.sin(M), Math.cos(M));
   let E = Mp;
@@ -42,10 +35,7 @@ function solveE(M: number, e: number) {
   return E;
 }
 
-/**
- * Renders a single celestial body with live orbital propagation and optional label.
- * Shows hover info and highlights orbit when selected.
- */
+/* ---------- Main Component ---------- */
 export default function BodyPoint({
   body,
   jd,
@@ -57,7 +47,12 @@ export default function BodyPoint({
 }) {
   const meshRef = useRef<THREE.Group>(null!);
   const { camera } = useThree();
-  const [isHovered, setHovered] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  // --- Planet store integration
+  const { selectedBodies } = usePlanetStore.getState();
+  const idOrName = String(body.name && body.name !== "None" ? body.name : body.id);
+  const isSelected = selectedBodies.includes(idOrName);
 
   const displayName = body.name && body.name !== "None" ? body.name : `#${body.id}`;
 
@@ -71,60 +66,61 @@ export default function BodyPoint({
 
   const R = useMemo(() => pqwToIJK(Ω, i, ω), [Ω, i, ω]);
 
+  /* ---------- Orbit path (for hover only) ---------- */
   const orbitGeom = useMemo(() => {
     if (e >= 1) return null;
     const segments = 256;
     const pts: THREE.Vector3[] = [];
-
     for (let k = 0; k <= segments; k++) {
       const M = (2 * Math.PI * k) / segments;
       const E = solveE(M, e);
       const r = a_AU * (1 - e * Math.cos(E));
       const cosν = (Math.cos(E) - e) / (1 - e * Math.cos(E));
-      const sinν = (Math.sqrt(1 - e * e) * Math.sin(E)) / (1 - e * Math.cos(E));
-      const x_p = r * cosν;
-      const y_p = r * sinν;
-      const v = new THREE.Vector3(x_p, y_p, 0).applyMatrix3(R);
+      const sinν = (Math.sqrt(1 - e ** 2) * Math.sin(E)) / (1 - e * Math.cos(E));
+      const v = new THREE.Vector3(r * cosν, r * sinν, 0).applyMatrix3(R);
       pts.push(v);
     }
-
     return new THREE.BufferGeometry().setFromPoints(pts);
   }, [a_AU, e, R]);
 
+  /* ---------- Position update ---------- */
   useFrame(() => {
     if (!meshRef.current) return;
-    const n = (2 * Math.PI) / (Math.sqrt(a_AU ** 3) * 365.25); // mean motion [rad/day]
+    const n = (2 * Math.PI) / (Math.sqrt(a_AU ** 3) * 365.25);
     const M = M0 + n * (jd - epochJD);
     const E = solveE(M, e);
 
     const r = a_AU * (1 - e * Math.cos(E));
     const cosν = (Math.cos(E) - e) / (1 - e * Math.cos(E));
     const sinν = (Math.sqrt(1 - e * e) * Math.sin(E)) / (1 - e * Math.cos(E));
-    const x_p = r * cosν;
-    const y_p = r * sinν;
-    const pos = new THREE.Vector3(x_p, y_p, 0).applyMatrix3(R);
+    const pos = new THREE.Vector3(r * cosν, r * sinν, 0).applyMatrix3(R);
     meshRef.current.position.copy(pos);
   });
 
   const distance = camera.position.length();
-  const opacity = Math.max(0, 1 - distance / 15);
+  const opacity = Math.max(0.6, 1 - distance / 20);
+  const bodyColor = body.color ?? "#ffffff";
 
   return (
     <>
-      {isHovered && orbitGeom && (
+      {/* --- Orbit visible when hovered --- */}
+      {hovered && orbitGeom && (
         <primitive
-          object={new THREE.Line(
-            orbitGeom,
-            new THREE.LineBasicMaterial({
-              color: body.color ?? "#ffffff",
-              transparent: true,
-              opacity: 0.7,
-            })
-          )}
+          object={
+            new THREE.Line(
+              orbitGeom,
+              new THREE.LineBasicMaterial({
+                color: bodyColor,
+                transparent: true,
+                opacity: 0.7,
+              })
+            )
+          }
           frustumCulled={false}
         />
       )}
 
+      {/* --- Body marker --- */}
       <group
         ref={meshRef}
         onPointerOver={() => setHovered(true)}
@@ -133,30 +129,42 @@ export default function BodyPoint({
         <mesh frustumCulled={false}>
           <sphereGeometry args={[0.015, 16, 16]} />
           <meshStandardMaterial
-            color={isHovered ? "#ffd500" : body.color ?? "#ffffff"}
-            emissive={isHovered ? "#ffd500" : "#000000"}
-            emissiveIntensity={isHovered ? 0.4 : 0}
+            color={isSelected ? "#ffd500" : bodyColor}
+            emissive={isSelected ? "#ffd500" : hovered ? bodyColor : "#000000"}
+            emissiveIntensity={isSelected ? 0.7 : hovered ? 0.4 : 0}
           />
         </mesh>
 
-        {showLabel && body.type === "Planet" && (
-          <Html center position={[0, 0.05, 0]} style={{ pointerEvents: "none" }}>
+        {/* --- Always visible label for selected bodies --- */}
+        {(showLabel && body.type === "Planet") || isSelected ? (
+          <Html center position={[0, 0.07, 0]} style={{ pointerEvents: "none" }}>
             <div
-              className="px-2 py-1 rounded-lg text-[11px] text-white/90 font-medium
-                         backdrop-blur-md bg-black/40 border border-white/10 shadow-md
-                         whitespace-nowrap select-none"
-              style={{ opacity }}
+              className="rounded-md font-semibold select-none"
+              style={{
+                padding: "3px 6px",
+                fontSize: isSelected ? "18px" : "11px",
+                color: isSelected ? bodyColor : "#eee",
+                background: isSelected
+                  ? "rgba(0,0,0,0.4)"
+                  : "rgba(0,0,0,0.25)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                textShadow: `0 0 10px ${bodyColor}88`,
+                backdropFilter: "blur(6px)",
+                transition: "all 0.25s ease",
+                opacity,
+              }}
             >
               {displayName}
             </div>
           </Html>
-        )}
+        ) : null}
 
-        {isHovered && (
-          <Html center position={[0, 0.08, 0]}>
+        {/* --- Hover info popup --- */}
+        {hovered && (
+          <Html center position={[0, 0.1, 0]}>
             <div
               className="p-2 rounded-lg text-[11px] leading-tight text-white backdrop-blur-md 
-                        bg-black/60 border border-white/10 shadow-lg whitespace-nowrap select-none"
+                         bg-black/60 border border-white/10 shadow-lg whitespace-nowrap select-none"
             >
               <div className="font-semibold text-[#ffd500]">{displayName}</div>
               <div className="text-gray-300">{body.type}</div>

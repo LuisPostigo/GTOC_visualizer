@@ -100,7 +100,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "C:\\Users\\luism\\OneDrive\\Documents\\Research\\GTOC\\gtoc-viewer-app\\GTOC Visualizer",
+    "outputFileTracingRoot": "C:\\Users\\luism\\OneDrive\\Documents\\Research\\GTOC_visualizer\\GTOC Visualizer",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -291,11 +291,11 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "C:\\Users\\luism\\OneDrive\\Documents\\Research\\GTOC\\gtoc-viewer-app\\GTOC Visualizer"
+      "root": "C:\\Users\\luism\\OneDrive\\Documents\\Research\\GTOC_visualizer\\GTOC Visualizer"
     },
     "distDirRoot": "out"
   },
-  "appDir": "C:\\Users\\luism\\OneDrive\\Documents\\Research\\GTOC\\gtoc-viewer-app\\GTOC Visualizer",
+  "appDir": "C:\\Users\\luism\\OneDrive\\Documents\\Research\\GTOC_visualizer\\GTOC Visualizer",
   "relativeAppDir": "",
   "files": [
     ".next\\routes-manifest.json",

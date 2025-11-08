@@ -18,52 +18,49 @@ import {
 import { useBodiesFromGTOCCSV } from "@/components/gtoc/utils/dataLoader";
 import { useSimClock } from "@/components/gtoc/utils/simClock";
 import type { HoverPayload } from "@/components/gtoc/solutions/SolutionPath";
-
-/* ---------- Types ---------- */
-export type ViewerCanvasProps = Partial<{
-  bodies: any[];
-  jd: number;
-  setJD: React.Dispatch<React.SetStateAction<number>>;
-  isPlaying: boolean;
-  setPlaying: React.Dispatch<React.SetStateAction<boolean>>;
-  rate: number;
-  setRate: React.Dispatch<React.SetStateAction<number>>;
-  milestonesJD: number[];
-  milestonesISO: string[];
-}>;
+import BodySelector from "@/components/gtoc/BodySelector";
+import { usePlanetStore } from "@/components/gtoc/stores/planetStore";
 
 type HoverState = { data: HoverPayload; x: number; y: number } | null;
 
-/* ======================= Main Component ======================= */
-export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
-  /* ---- Simulation clock ---- */
+export default function ViewerCanvas(props = {}) {
   const usingExternalClock =
-    props.jd !== undefined &&
-    props.setJD &&
-    props.isPlaying !== undefined &&
-    props.setPlaying &&
-    props.rate !== undefined &&
-    props.setRate;
+    "jd" in props &&
+    "setJD" in props &&
+    "isPlaying" in props &&
+    "setPlaying" in props &&
+    "rate" in props &&
+    "setRate" in props;
 
   const { jd, setJD, isPlaying, setPlaying, rate, setRate } = usingExternalClock
-    ? (props as Required<
-        Pick<
-          ViewerCanvasProps,
-          "jd" | "setJD" | "isPlaying" | "setPlaying" | "rate" | "setRate"
-        >
-      >)
+    ? (props as any)
     : useSimClock();
 
-  /* ---- Load celestial bodies ---- */
   const bodiesHook = useBodiesFromGTOCCSV("/data/df_extracted_full.csv", [
     "Planet",
     "Asteroid",
     "Comet",
   ]);
-  const bodies = props.bodies ?? bodiesHook.bodies ?? [];
+  const bodies = (props as any).bodies ?? bodiesHook.bodies ?? [];
   const hookError = bodiesHook.error;
 
-  /* ---- Tooltip state ---- */
+  const { setPlanets, selectedBodies } = usePlanetStore();
+
+  useEffect(() => {
+    if (bodies && bodies.length > 0) {
+      const mapped = bodies
+        .filter((b: any) => b && (b.name || b.id))
+        .map((b: any) => ({
+          id: b.id,
+          name: b.name || String(b.id),
+          type: b.type,
+          color:
+            b.color ?? TYPE_COLORS[b.type as "Planet" | "Asteroid" | "Comet"],
+        }));
+      setPlanets(mapped);
+    }
+  }, [bodies, setPlanets]);
+
   const [hover, setHover] = useState<HoverState>(null);
 
   const bodyName = useMemo(() => {
@@ -76,7 +73,6 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
     return m;
   }, [bodies]);
 
-  /* ---- Tooltip overlay ---- */
   const tooltip = hover && (
     <div
       className="pointer-events-none fixed z-[2147483646] select-none"
@@ -90,7 +86,6 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
         }}
       >
         <div className="rounded-xl backdrop-blur-md bg-black/85 px-3 py-2 text-[11px] text-white min-w-[200px] border border-white/10 shadow-2xl">
-          {/* === Header: color dot + solution name === */}
           <div className="flex items-center justify-center mb-2">
             <span
               className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-white/30 mr-2"
@@ -100,8 +95,6 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
               {hover.data.solutionName}
             </div>
           </div>
-
-          {/* === Body: leg path === */}
           <div className="text-xs text-center text-white/70 mb-1">
             {hover.data.fromBody
               ? bodyName.get(hover.data.fromBody) ?? `#${hover.data.fromBody}`
@@ -111,8 +104,6 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
               ? bodyName.get(hover.data.toBody) ?? `#${hover.data.toBody}`
               : "—"}
           </div>
-
-          {/* === Footer: leg index + TOF === */}
           <div className="mt-1 pt-1 border-t border-white/10 text-[10px] text-white/60 text-center">
             Leg {hover.data.legIndex} • TOF {hover.data.tofDays.toFixed(1)} days
           </div>
@@ -121,22 +112,18 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
     </div>
   );
 
-
-  /* ---- Render ---- */
   return (
     <div className="relative w-full h-screen bg-black">
-      {/* 🧭 Overlay UI */}
+      <BodySelector />
       <SolutionsUI />
 
-      {/* 🪐 3D Scene */}
       <Canvas
         dpr={[1, 2]}
         camera={{ fov: 65, near: 0.001, far: 1e12, position: [0, 0, 2e6] }}
       >
-        {/* Scene setup */}
-        <color attach="background" args={["#000000"]} />
+        <color attach="background" args={["#000"]} />
         <ambientLight intensity={0.6} />
-        <pointLight position={[0, 0, 0]} intensity={2.0} color="#ffffff" />
+        <pointLight position={[0, 0, 0]} intensity={2.0} color="#fff" />
 
         <CameraRig />
         <OrbitControls enableDamping dampingFactor={0.1} />
@@ -145,26 +132,31 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
         <Sun />
         <Axes size={1.0} />
 
-        {/* === Celestial Bodies === */}
-        {bodies?.map((b: any) => (
-          <group key={b.id}>
-            {b.type === "Planet" && b.e < 1 ? (
-              <>
-                <OrbitPath
-                  body={b}
-                  visible
-                  segments={256}
-                  color={b.color ?? TYPE_COLORS[b.type as "Planet" | "Asteroid" | "Comet"]}
-                />
-                <BodyPoint body={b} jd={jd} showLabel />
-              </>
-            ) : (
-              <BodyPoint body={b} jd={jd} />
-            )}
-          </group>
-        ))}
+        {bodies
+          ?.filter((b: any) => b && (b.name || b.id) && b.a_AU && b.e !== undefined)
+          .map((b: any, idx: number) => {
+            const idOrName = String(b.name && b.name !== "None" ? b.name : b.id);
+            const isSelected = selectedBodies.includes(idOrName);
+            const showOrbit = b.type === "Planet" || isSelected;
 
-        {/* ✅ Imported Trajectories with hover */}
+            return (
+              <group key={String(b.id ?? b.name ?? idx)}>
+                {showOrbit && (
+                  <OrbitPath
+                    body={b}
+                    visible
+                    segments={256}
+                    color={
+                      b.color ?? TYPE_COLORS[b.type as "Planet" | "Asteroid" | "Comet"]
+                    }
+                    isSelected={isSelected}
+                  />
+                )}
+                <BodyPoint body={b} jd={jd} showLabel={isSelected || b.type === "Planet"} />
+              </group>
+            );
+          })}
+
         <Solutions3D
           currentJD={jd}
           epochZeroJD={JD_EPOCH_0}
@@ -174,10 +166,8 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
         />
       </Canvas>
 
-      {/* ✨ Tooltip */}
       {tooltip}
 
-      {/* === HUD overlay === */}
       <PortalHUD>
         <div className="pointer-events-auto fixed left-1/2 -translate-x-1/2 bottom-2 z-[999] w-full max-w-[120rem] px-3">
           <HUD
@@ -191,14 +181,14 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
             jdMin={JD_EPOCH_0}
             jdMax={JD_EPOCH_0 + 200 * DAYS_PER_YEAR}
             milestonesJD={
-              props.milestonesJD ?? [
+              (props as any).milestonesJD ?? [
                 JD_EPOCH_0,
                 JD_EPOCH_0 + 50 * DAYS_PER_YEAR,
                 JD_EPOCH_0 + 100 * DAYS_PER_YEAR,
               ]
             }
             milestonesISO={
-              props.milestonesISO ?? [
+              (props as any).milestonesISO ?? [
                 "2000-01-01",
                 "2050-01-01",
                 "2100-01-01",
@@ -208,7 +198,6 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
         </div>
       </PortalHUD>
 
-      {/* === Error banner === */}
       {hookError && (
         <div className="absolute top-16 right-3 z-[80] text-xs pointer-events-none">
           <div className="px-3 py-2 rounded bg-red-600 text-white shadow">
@@ -220,7 +209,6 @@ export default function ViewerCanvas(props: ViewerCanvasProps = {}) {
   );
 }
 
-/* ======================= Utility Components ======================= */
 function PortalHUD({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);

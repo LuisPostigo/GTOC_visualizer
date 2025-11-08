@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
+import { usePlanetStore } from "@/components/gtoc/stores/planetStore";
 import {
   TYPE_COLORS,
   AU_KM,
@@ -28,29 +29,7 @@ export interface Body {
   color?: string;
 }
 
-export interface CandidateLOD {
-  level: 1 | 2 | 3;
-  path: [number, number, number][];
-}
-
-export interface CandidateEvent {
-  tJD: number;
-  label: string;
-  bodyId: string;
-  vinf_kms?: number;
-  alt_km?: number;
-}
-
-export interface Candidate {
-  id: string;
-  name: string;
-  lods: CandidateLOD[];
-  events: CandidateEvent[];
-  color?: string;
-}
-
 /* ======================= Kepler Solver ======================= */
-/** Solves Kepler’s equation for elliptic, parabolic, and hyperbolic orbits. */
 export function solveKepler(M: number, e: number, tol = 1e-10, maxIter = 50): number {
   if (e < 1) {
     let E = M;
@@ -64,9 +43,8 @@ export function solveKepler(M: number, e: number, tol = 1e-10, maxIter = 50): nu
     return E;
   }
 
-  if (e === 1) return M; // Parabolic fallback
+  if (e === 1) return M;
 
-  // Hyperbolic
   let H = Math.log((2 * Math.abs(M)) / e + 1.8);
   for (let k = 0; k < maxIter; k++) {
     const sH = Math.sinh(H);
@@ -138,24 +116,24 @@ export function keplerToPositionAU(body: Body, jd: number): THREE.Vector3 {
 }
 
 /* ======================= Scene Components ======================= */
-/** Draws a static orbital path for an elliptic body. */
 export function OrbitPath({
   body,
   visible = true,
   segments = 256,
   color,
+  isSelected = false,
 }: {
   body: Body;
   visible?: boolean;
   segments?: number;
   color?: string;
+  isSelected?: boolean;
 }) {
   if (!visible) return null;
 
   const points = useMemo(() => {
     const a = body.a_AU;
     const e = body.e;
-
     if (!Number.isFinite(a) || a <= 0 || !Number.isFinite(e) || e >= 1) return [];
 
     const pts: THREE.Vector3[] = [];
@@ -180,13 +158,11 @@ export function OrbitPath({
       const denom = 1 + e * Math.cos(f);
       if (Math.abs(denom) < 1e-9) continue;
       const r_km = (a_km * (1 - e ** 2)) / denom;
-
       const x_peri = r_km * Math.cos(f);
       const y_peri = r_km * Math.sin(f);
       const x = (R11 * x_peri + R12 * y_peri) / AU_KM;
       const y = (R21 * x_peri + R22 * y_peri) / AU_KM;
       const z = (R31 * x_peri + R32 * y_peri) / AU_KM;
-
       if (Number.isFinite(x + y + z)) pts.push(new THREE.Vector3(x, y, z));
     }
     return pts;
@@ -194,111 +170,76 @@ export function OrbitPath({
 
   if (!points.length) return null;
 
+  const lineWidth = isSelected ? 2.5 : 1;
+  const opacity = isSelected ? 1.0 : 0.7;
+  const finalColor = isSelected ? "#ffd500" : color ?? TYPE_COLORS[body.type];
+
   return (
     <Line
       points={points}
-      lineWidth={1}
-      color={color ?? TYPE_COLORS[body.type]}
-      opacity={0.7}
+      lineWidth={lineWidth}
+      color={finalColor}
+      opacity={opacity}
       transparent
-      raycast={() => null}
+      depthWrite={false}
+      toneMapped={false}
+      frustumCulled={false}
     />
   );
 }
 
-/** Displays an orbiting body with a hover tooltip and live position updates. */
+/* ======================= BodyPoint (with big label for selected) ======================= */
 export function BodyPoint({ body, jd }: { body: Body; jd: number }) {
   const dotRef = useRef<THREE.Mesh>(null!);
   const hitRef = useRef<THREE.Mesh>(null!);
   const { camera } = useThree();
   const [hovered, setHovered] = useState(false);
-  const [tooltip, setTooltip] = useState<{ pos: THREE.Vector3; Ldeg: number; fdeg: number } | null>(null);
   const color = new THREE.Color(body.color ?? TYPE_COLORS[body.type]);
+  const { selectedBodies } = usePlanetStore.getState();
+  const idOrName = String(body.name && body.name !== "None" ? body.name : body.id);
+  const isSelected = selectedBodies.includes(idOrName);
 
   useFrame(() => {
     const r = keplerToPositionAU(body, jd);
     dotRef.current.position.copy(r);
     hitRef.current.position.copy(r);
-
-    if (!hovered) return;
-
-    const a_km = body.a_AU * AU_KM;
-    const n = Math.sqrt(ALTAIRA_GM / (a_km ** 3));
-    const dt_s = (jd - body.epoch_JD) * SECONDS_PER_DAY;
-    let M = body.M0 + n * dt_s;
-    if (body.e < 1) M = ((M + Math.PI) % (2 * Math.PI)) - Math.PI;
-    const L = body.Omega + body.omega + M;
-
-    const EorH = solveKepler(M, body.e);
-    const f_true =
-      body.e < 1
-        ? Math.atan2(
-            Math.sqrt(1 - body.e ** 2) * Math.sin(EorH),
-            Math.cos(EorH) - body.e
-          )
-        : Math.atan2(
-            Math.sqrt(body.e ** 2 - 1) * Math.sinh(EorH),
-            body.e - Math.cosh(EorH)
-          );
-
-    const dir = r.clone().sub(camera.position).normalize();
-    const pos = r.clone().add(dir.multiplyScalar(0.06));
-
-    setTooltip({
-      pos,
-      Ldeg: THREE.MathUtils.radToDeg(L),
-      fdeg: THREE.MathUtils.radToDeg(f_true),
-    });
   });
 
-  const displayName = body.name?.trim()?.length ? body.name : body.id;
-  const typeLabel = body.type ?? "Body";
+  const displayName = body.name && body.name !== "None" ? body.name : body.id;
 
   return (
     <group onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
-      {body.type !== "Planet" && (
-        <OrbitPath
-          body={body}
-          visible={hovered}
-          segments={192}
-          color={body.color ?? TYPE_COLORS[body.type]}
-        />
-      )}
-
       <mesh ref={hitRef}>
         <sphereGeometry args={[0.035, 8, 8]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      <mesh ref={dotRef}>
+      <mesh ref={dotRef} scale={isSelected ? 1.8 : hovered ? 1.3 : 1.0}>
         <sphereGeometry args={[0.01, 16, 16]} />
         <meshBasicMaterial color={color} />
       </mesh>
 
-      {hovered && tooltip && (
+      {(hovered || isSelected) && (
         <Html
-          position={tooltip.pos.toArray()}
+          position={[0, 0.05, 0]}
           center
           sprite
-          distanceFactor={8}
-          style={{ pointerEvents: "none", transform: "translate(-50%, -110%)" }}
+          distanceFactor={10}
+          style={{ pointerEvents: "none", transform: "translate(-50%, -140%)" }}
         >
-          <div className="relative z-50 inline-block w-max">
-            <div className="absolute inset-0 -z-10 blur-md opacity-40 rounded-2xl bg-gradient-to-br from-white/70 to-white/10" />
-            <div className="px-3 py-2 rounded-2xl bg-white/95 text-xs shadow-lg ring-1 ring-black/5 text-black">
-              <div className="text-[8px] uppercase tracking-wide text-zinc-500 whitespace-nowrap">
-                {typeLabel}
-              </div>
-              <div className="text-base font-semibold leading-5 whitespace-nowrap">
-                {displayName}
-              </div>
-              <div className="mt-1 text-[10px] text-zinc-700 whitespace-nowrap">
-                Mean longitude: {tooltip.Ldeg.toFixed(2)}°
-              </div>
-              <div className="text-[10px] text-zinc-700 whitespace-nowrap">
-                True anomaly: {tooltip.fdeg.toFixed(2)}°
-              </div>
-            </div>
+          <div
+            className={`font-semibold ${
+              isSelected ? "text-white" : "text-gray-300"
+            }`}
+            style={{
+              fontSize: isSelected ? "18px" : "11px",
+              letterSpacing: "0.5px",
+              textShadow: "0 0 10px rgba(255,255,255,0.5)",
+              opacity: isSelected ? 1.0 : 0.75,
+              transition: "all 0.25s ease",
+            }}
+          >
+            {displayName}
           </div>
         </Html>
       )}
@@ -306,7 +247,7 @@ export function BodyPoint({ body, jd }: { body: Body; jd: number }) {
   );
 }
 
-/** Renders the central Sun sphere. */
+/* ======================= Miscellaneous Components ======================= */
 export function Sun() {
   return (
     <mesh>
@@ -316,7 +257,6 @@ export function Sun() {
   );
 }
 
-/** Draws RGB axes for scene orientation. */
 export function Axes({ size = 1.0 }: { size?: number }) {
   return (
     <group>
@@ -327,57 +267,10 @@ export function Axes({ size = 1.0 }: { size?: number }) {
   );
 }
 
-/** Initializes the camera position at scene load. */
 export function CameraRig() {
   const { camera } = useThree();
   useEffect(() => {
     camera.position.set(0, 0, 3.5);
   }, [camera]);
   return null;
-}
-
-/** Selects the appropriate LOD for a candidate based on camera distance. */
-export function useCandidateLOD(candidate: Candidate) {
-  const { camera } = useThree();
-  return useMemo(() => {
-    const sphere = new THREE.Sphere(new THREE.Vector3(), 0);
-    const all = candidate.lods[candidate.lods.length - 1].path;
-    for (const p of all) sphere.expandByPoint(new THREE.Vector3().fromArray(p));
-    const d = camera.position.distanceTo(sphere.center) - sphere.radius;
-    if (d > 10) return candidate.lods.find(l => l.level === 3)!;
-    if (d > 3) return candidate.lods.find(l => l.level === 2)!;
-    return candidate.lods.find(l => l.level === 1)!;
-  }, [candidate, camera.position.x, camera.position.y, camera.position.z]);
-}
-
-/** Displays a labeled event marker near its associated body. */
-export function EventBillboard({
-  event,
-  jd,
-  bodies,
-}: {
-  event: CandidateEvent;
-  jd: number;
-  bodies: Body[];
-}) {
-  const show = Math.abs(jd - event.tJD) < 30;
-  if (!show) return null;
-  const body = bodies.find(b => b.id === event.bodyId);
-  const pos = body ? keplerToPositionAU(body, event.tJD) : new THREE.Vector3();
-
-  return (
-    <group position={pos.toArray()}>
-      <mesh>
-        <sphereGeometry args={[0.012, 8, 8]} />
-        <meshBasicMaterial color="#ffffff" />
-      </mesh>
-      <Html center distanceFactor={8} style={{ pointerEvents: "auto" }}>
-        <div className="px-2 py-1 rounded-xl bg-white/90 text-xs shadow border border-gray-200">
-          <strong>{event.label}</strong>
-          {event.vinf_kms != null && <div>V∞: {event.vinf_kms.toFixed(1)} km/s</div>}
-          {event.alt_km != null && <div>Alt: {event.alt_km.toFixed(0)} km</div>}
-        </div>
-      </Html>
-    </group>
-  );
 }
