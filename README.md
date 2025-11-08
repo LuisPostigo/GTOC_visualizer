@@ -2,7 +2,7 @@
 
 ## Download/Install
 
-Navigate to the "download" folder. Select either the windows/linux installer, or the MacOS one.
+Navigate to the "download" folder. Select either the windows/linux installer (GTOC Visualizer_0.1.0_x64-setup.exe), or the MacOS one (GTOC_Visualizer_MacOS.zip).
 
 > [!WARNING]
 > For MacOS users: When running the downloaded file, an error "Apple can’t check app for malicious software..." may show up. In that event:
