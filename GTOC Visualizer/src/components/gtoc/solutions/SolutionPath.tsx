@@ -14,6 +14,8 @@ export type HoverPayload = {
   fromBody?: number | null;
   toBody?: number | null;
   tofDays: number;
+  /** Distinguish where the hover came from */
+  kind?: "leg" | "ship";
 };
 
 /* ---------- Props ---------- */
@@ -60,9 +62,9 @@ export default function SolutionPath({
   );
   if (pts.length < 2) return null;
 
-  // --- Continuous progress interpolation ---
-  const elapsed = (currentJD - epochZeroJD) * SECONDS_PER_DAY;
-  const times = sol.samples.map((s) => s.t);
+  // --- Time & interpolation along trajectory ---
+  const elapsed = (currentJD - epochZeroJD) * SECONDS_PER_DAY; // seconds since t0
+  const times = sol.samples.map((s) => s.t);                   // file’s time units
 
   let idx = times.findIndex((t, i) => elapsed >= t && elapsed <= times[i + 1]);
   if (idx < 0) idx = Math.max(0, times.length - 2);
@@ -76,75 +78,83 @@ export default function SolutionPath({
 
   const baseColor = sol.color || "#66d9e8";
 
-  // --- Hovered leg state ---
+  // --- Hovered leg (for highlighting) ---
   const [hoveredLeg, setHoveredLeg] = useState<number | null>(null);
 
-    // --- Leg metadata (hover info) ---
+  // --- Legs by body transitions (for section highlighting & TOF tooltip) ---
   const legs = useMemo(() => {
-      const out: {
-        fromBody: number;
-        toBody: number;
-        t0: number;
-        t1: number;
-        pts: THREE.Vector3[];
-      }[] = [];
+    const out: {
+      fromBody: number;
+      toBody: number;
+      t0: number;
+      t1: number;
+      pts: THREE.Vector3[];
+    }[] = [];
 
-      if (!sol.samples.length) return out;
+    if (!sol.samples.length) return out;
 
-      const scaled = sol.samples.map((s) => ({
-        t: s.t,
-        body: s.bodyId ?? 0,
-        v: new THREE.Vector3(...s.p).multiplyScalar(SCALE),
-      }));
+    const scaled = sol.samples.map((s) => ({
+      t: s.t,
+      body: s.bodyId ?? 0,
+      v: new THREE.Vector3(...s.p).multiplyScalar(SCALE),
+    }));
 
-      let cur = {
-        fromBody: scaled[0].body,
-        toBody: scaled[0].body,
-        t0: scaled[0].t,
-        t1: scaled[0].t,
-        pts: [scaled[0].v],
-      };
+    let cur = {
+      fromBody: scaled[0].body,
+      toBody: scaled[0].body,
+      t0: scaled[0].t,
+      t1: scaled[0].t,
+      pts: [scaled[0].v],
+    };
 
-      for (let i = 1; i < scaled.length; i++) {
-        const s = scaled[i];
-        cur.pts.push(s.v);
-        cur.t1 = s.t;
+    for (let i = 1; i < scaled.length; i++) {
+      const s = scaled[i];
+      cur.pts.push(s.v);
+      cur.t1 = s.t;
 
-        // Detect a body transition
-        const nextBody = scaled[i + 1]?.body ?? s.body;
-        if (nextBody !== s.body) {
-          // Find the next distinct body ahead to serve as destination
-          const toBody =
-            scaled
-              .slice(i + 1)
-              .map((p) => p.body)
-              .find((b) => b !== s.body) ?? s.body;
+      // Detect a body transition
+      const nextBody = scaled[i + 1]?.body ?? s.body;
+      if (nextBody !== s.body) {
+        // Find the next distinct body ahead to serve as destination
+        const toBody =
+          scaled
+            .slice(i + 1)
+            .map((p) => p.body)
+            .find((b) => b !== s.body) ?? s.body;
 
-          cur.toBody = toBody;
-          out.push(cur);
+        cur.toBody = toBody;
+        out.push(cur);
 
-          // Start new leg
-          cur = {
-            fromBody: s.body,
-            toBody,
-            t0: s.t,
-            t1: s.t,
-            pts: [],
-          };
-        }
+        // Start new leg
+        cur = {
+          fromBody: s.body,
+          toBody,
+          t0: s.t,
+          t1: s.t,
+          pts: [],
+        };
       }
+    }
 
-      // Push the last leg if valid
-      if (cur.pts.length > 0) out.push(cur);
+    // Push the last leg if valid
+    if (cur.pts.length > 0) out.push(cur);
 
-      return out;
-    }, [sol.samples, SCALE]);
+    return out;
+  }, [sol.samples, SCALE]);
 
+  // --- Which leg contains the current ship position? ---
+  const currentLegIndex = useMemo(() => {
+    if (!legs.length) return null;
+    const k = legs.findIndex((L) => elapsed >= L.t0 && elapsed <= L.t1);
+    if (k >= 0) return k;
+    if (elapsed < legs[0].t0) return 0;
+    return legs.length - 1;
+  }, [elapsed, legs]);
 
   /* ============================================================= */
   return (
     <group>
-      {/* thin dashed outline of full orbit */}
+      {/* thin dashed outline of full trajectory */}
       <Line
         points={pts}
         color={baseColor}
@@ -168,22 +178,48 @@ export default function SolutionPath({
         toneMapped={false}
       />
 
-      {/* spacecraft marker */}
+      {/* spacecraft marker — ONLY this triggers epoch tooltip */}
       {showShip && (
-        <mesh position={shipPos}>
+        <mesh
+          position={shipPos}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            if (currentLegIndex != null) setHoveredLeg(currentLegIndex); // highlight current leg
+            const leg = currentLegIndex != null ? legs[currentLegIndex] : undefined;
+            const tofDays = leg ? (leg.t1 - leg.t0) / SECONDS_PER_DAY : 0;
+            onHover?.(
+              {
+                solutionName: sol.name,
+                color: baseColor,
+                legIndex: (currentLegIndex ?? 0) + 1,
+                fromBody: leg?.fromBody,
+                toBody: leg?.toBody,
+                tofDays,
+                kind: "ship", // 👈 distinct type for epoch tooltip
+              },
+              (e as any).clientX,
+              (e as any).clientY
+            );
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            setHoveredLeg(null);
+            onUnhover?.();
+          }}
+        >
           <sphereGeometry args={[0.05, 32, 32]} />
           <meshBasicMaterial color={baseColor} toneMapped={false} />
         </mesh>
       )}
 
-      {/* hoverable legs + highlight */}
+      {/* hoverable legs + highlight (these DO trigger section tooltip: planets + TOF) */}
       {legs.map((leg, i) => {
-        const tofDays = (leg.t1 - leg.t0) / SECONDS_PER_DAY;
         const isHovered = hoveredLeg === i;
+        const tofDays = (leg.t1 - leg.t0) / SECONDS_PER_DAY;
 
         return (
           <group key={`${sol.id}-leg-${i}`}>
-            {/* ✨ bright highlight when hovered */}
+            {/* bright highlight for the whole section when hovered */}
             {isHovered && (
               <Line
                 points={leg.pts}
@@ -195,7 +231,7 @@ export default function SolutionPath({
               />
             )}
 
-            {/* invisible hit zone for hover detection */}
+            {/* invisible hit zone to set the highlight + trigger TOF tooltip */}
             <Line
               points={leg.pts}
               color={baseColor}
@@ -214,9 +250,10 @@ export default function SolutionPath({
                     fromBody: leg.fromBody,
                     toBody: leg.toBody,
                     tofDays,
+                    kind: "leg", // 👈 distinct type for section tooltip
                   },
-                  e.clientX,
-                  e.clientY
+                  (e as any).clientX,
+                  (e as any).clientY
                 );
               }}
               onPointerOut={(e) => {

@@ -1,14 +1,22 @@
 export const SYSTEM_NAME = "Altaira System";
 
 /* ===================== Universal Constants ===================== */
-export const AU_KM = 149_597_870.691;        // kilometers per astronomical unit
-export const SECONDS_PER_DAY = 86_400;       // seconds per day
-export const DAYS_PER_YEAR = 365.25;         // mean solar days per year
-export const ALTAIRA_GM = 139_348_062_043.343; // km³/s² (gravitational parameter)
+export const AU_KM = 149_597_870.691;            // kilometers per astronomical unit
+export const SECONDS_PER_DAY = 86_400;           // seconds per day
+export const DAYS_PER_YEAR = 365.25;             // mean solar days per year
+export const ALTAIRA_GM = 139_348_062_043.343;   // km³/s² (gravitational parameter)
 
 /* ===================== Time References ===================== */
-export const JD_SIM_START = 0;          // synthetic epoch for GTOC13 simulation
-export const JD_EPOCH_0 = 2451545.0;    // reference epoch (display anchor only)
+// J2000 (TT). Also used as the **file epoch t₀** for solution epochs (seconds since t₀).
+export const JD_EPOCH_0 = 2451545.0;
+
+// Viewer start epoch; alias to file t₀ to keep viewer-time == file-time.
+export const JD_SIM_START = JD_EPOCH_0;
+
+// Unix epoch (1970-01-01T00:00:00Z) expressed in Julian Date.
+export const UNIX_EPOCH_JD = 2440587.5;
+
+// Milliseconds per day (keep spelling to match existing imports elsewhere).
 export const MILISECONDS_PER_DAY = 86_400_000;
 
 /* ===================== Solar Sail Parameters ===================== */
@@ -62,6 +70,10 @@ export const CONSTANTS = {
   SECONDS_PER_DAY,
   DAYS_PER_YEAR,
   ALTAIRA_GM,
+  JD_EPOCH_0,
+  JD_SIM_START,
+  UNIX_EPOCH_JD,
+  MILISECONDS_PER_DAY,
   SAIL,
   COMPETITION,
   BODY_WEIGHTS,

@@ -4,6 +4,7 @@ import {
   SECONDS_PER_DAY,
   MILISECONDS_PER_DAY,
   DAYS_PER_YEAR,
+  JD_EPOCH_0,
 } from "@/components/gtoc/utils/constants";
 import { useEffect, useRef, useState, useCallback } from "react";
 
@@ -59,6 +60,19 @@ export function makeJDRangeFromYears(centerJD: number, years: number) {
   return { jdMin: centerJD - days, jdMax: centerJD + days };
 }
 
+/** === NEW: file-epoch glue (epoch seconds ↔ JD) === */
+export const JD_T0 = JD_EPOCH_0;
+
+/** Seconds past t₀ (solution-file epoch) for a given JD. */
+export function epochSecondsFromJD(jd: number): number {
+  return Math.round((jd - JD_T0) * SECONDS_PER_DAY);
+}
+
+/** JD corresponding to epoch seconds past t₀. */
+export function jdFromEpochSeconds(tSec: number): number {
+  return JD_T0 + tSec / SECONDS_PER_DAY;
+}
+
 /* ============================ useSimClock ============================ */
 
 export type SimClockOpts = {
@@ -89,8 +103,9 @@ export function useSimClock(opts: SimClockOpts = {}) {
     rate0 = 50,
   } = opts;
 
+  // ✅ Default to file epoch (JD_EPOCH_0) rather than wall-clock "now"
   const [jd, _setJD] = useState<number>(() =>
-    clamp(jd0 ?? dateToJD(new Date()), jdMin, jdMax)
+    clamp(jd0 ?? JD_EPOCH_0, jdMin, jdMax)
   );
   const [isPlaying, _setPlaying] = useState<boolean>(playing);
   const [rate, _setRate] = useState<number>(rate0); // days per second
