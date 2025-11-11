@@ -1,17 +1,33 @@
-# GTOC 13 Visualizer.
+# GTOC 13 Visualizer
 
-## Download/Install
+> [!NOTE]
+> Version **1.2.0** introduces major improvements!  
+> <br>
+> <p align="center">
+>   <img src="graphics/version_1_2_0.png" alt="Version 1.2.0 Banner" width="600">
+> </p>
+> 
+> 🪐 Includes **body selection**, allowing you to visualize one or multiple planets, asteroids, or comets interactively.
+> 🪐 Includes **conic arcs**, using Cowell's Formulation. Which uses an IVP approach to propagate the orbits.
+> 🪐 Includes **current epoch**, when hovering over the current location.
 
-Navigate to the "download" folder. Select either the windows/linux installer (GTOC Visualizer_0.1.0_x64-setup.exe), or the MacOS one (GTOC_Visualizer_MacOS.zip).
+---
+
+## Download / Install
+
+Navigate to the `download` folder.  
+Select either the Windows/Linux installer (`GTOC_Visualizer_X.X.X_x64-setup.exe`) or the macOS one (`GTOC_Visualizer_X_X_X.zip`).
 
 > [!WARNING]
-> For MacOS users: When running the downloaded file, an error "Apple can’t check app for malicious software..." may show up. In that event:
-> 1. On your Mac, choose Apple menu  > System Settings, then click Privacy & Security in the sidebar. (You may need to scroll down.)
-> 2. Go to Security, then click Open.
-> 3. Click Open Anyway.
-> 4. This button is available for about an hour after you try to open the app.
-> 5. Enter your login password, then click OK.
+> **MacOS users:** If you see the message  
+> *“Apple can’t check app for malicious software…”*  
+> follow these steps:
+> 1. Apple menu → **System Settings** → **Privacy & Security**
+> 2. Under **Security**, click **Open**
+> 3. Click **Open Anyway**
+> 4. Enter your password, click **OK**
+
+---
 
 ## Requirements
-
-- MacOS: Supports macOS 10.13 and above.
+- macOS: Supports macOS 10.13 and above
