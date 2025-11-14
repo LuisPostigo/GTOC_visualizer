@@ -6,7 +6,6 @@ import { Line } from "@react-three/drei";
 import { AU_KM, SECONDS_PER_DAY } from "@/components/gtoc/utils/constants";
 import { Solution } from "./types";
 
-/* ---------- Hover payload type ---------- */
 export type HoverPayload = {
   solutionName: string;
   color: string;
@@ -14,11 +13,9 @@ export type HoverPayload = {
   fromBody?: number | null;
   toBody?: number | null;
   tofDays: number;
-  /** Distinguish where the hover came from */
   kind?: "leg" | "ship";
 };
 
-/* ---------- Props ---------- */
 type Props = {
   sol: Solution;
   currentJD: number;
@@ -28,7 +25,6 @@ type Props = {
   onUnhover?: () => void;
 };
 
-/* ============================================================= */
 export default function SolutionPath({
   sol,
   currentJD,
@@ -39,7 +35,7 @@ export default function SolutionPath({
 }: Props) {
   if (!sol?.samples?.length) return null;
 
-  // --- Detect AU vs km ---
+  /* -------------------- SCALE -------------------- */
   const medianR = (() => {
     const mags = sol.samples
       .map((s) => Math.hypot(...s.p))
@@ -49,39 +45,27 @@ export default function SolutionPath({
   })();
   const SCALE = medianR > 1e3 ? 1 / AU_KM : 1;
 
-  // --- Convert to 3D points ---
+  /* -------------------- POINTS -------------------- */
   const pts = useMemo(
     () =>
       sol.samples
         .map((s) => new THREE.Vector3(...s.p).multiplyScalar(SCALE))
-        .filter(
-          (v) =>
-            Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
-        ),
+        .filter((v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)),
     [sol.samples, SCALE]
   );
+
   if (pts.length < 2) return null;
 
-  // --- Time & interpolation along trajectory ---
-  const elapsed = (currentJD - epochZeroJD) * SECONDS_PER_DAY; // seconds since t0
-  const times = sol.samples.map((s) => s.t);                   // file’s time units
+  /* -------------------- TIME -------------------- */
+  const elapsed = (currentJD - epochZeroJD) * SECONDS_PER_DAY;
+  const times = sol.samples.map((s) => s.t);
+  const firstEpoch = times[0];
+  const solutionStarted = elapsed >= firstEpoch;
 
-  let idx = times.findIndex((t, i) => elapsed >= t && elapsed <= times[i + 1]);
-  if (idx < 0) idx = Math.max(0, times.length - 2);
-
-  const t0 = times[idx];
-  const t1 = times[idx + 1];
-  const a = t1 > t0 ? (elapsed - t0) / (t1 - t0) : 0;
-
-  const shipPos = pts[idx].clone().lerp(pts[idx + 1], a);
-  const visiblePts = [...pts.slice(0, idx + 1), shipPos];
-
-  const baseColor = sol.color || "#66d9e8";
-
-  // --- Hovered leg (for highlighting) ---
+  /* -------------------- STATE HOOK -------------------- */
   const [hoveredLeg, setHoveredLeg] = useState<number | null>(null);
 
-  // --- Legs by body transitions (for section highlighting & TOF tooltip) ---
+  /* -------------------- LEGS SPLIT -------------------- */
   const legs = useMemo(() => {
     const out: {
       fromBody: number;
@@ -90,8 +74,6 @@ export default function SolutionPath({
       t1: number;
       pts: THREE.Vector3[];
     }[] = [];
-
-    if (!sol.samples.length) return out;
 
     const scaled = sol.samples.map((s) => ({
       t: s.t,
@@ -112,20 +94,14 @@ export default function SolutionPath({
       cur.pts.push(s.v);
       cur.t1 = s.t;
 
-      // Detect a body transition
       const nextBody = scaled[i + 1]?.body ?? s.body;
       if (nextBody !== s.body) {
-        // Find the next distinct body ahead to serve as destination
         const toBody =
-          scaled
-            .slice(i + 1)
-            .map((p) => p.body)
-            .find((b) => b !== s.body) ?? s.body;
+          scaled.slice(i + 1).map((p) => p.body).find((b) => b !== s.body) ?? s.body;
 
         cur.toBody = toBody;
         out.push(cur);
 
-        // Start new leg
         cur = {
           fromBody: s.body,
           toBody,
@@ -136,13 +112,11 @@ export default function SolutionPath({
       }
     }
 
-    // Push the last leg if valid
     if (cur.pts.length > 0) out.push(cur);
-
     return out;
   }, [sol.samples, SCALE]);
 
-  // --- Which leg contains the current ship position? ---
+  /* -------------------- CURRENT LEG -------------------- */
   const currentLegIndex = useMemo(() => {
     if (!legs.length) return null;
     const k = legs.findIndex((L) => elapsed >= L.t0 && elapsed <= L.t1);
@@ -151,25 +125,42 @@ export default function SolutionPath({
     return legs.length - 1;
   }, [elapsed, legs]);
 
+  /* -------------------- INTERPOLATION (only after start) -------------------- */
+  let shipPos = pts[0];
+  let visiblePts = [pts[0]];
+
+  if (solutionStarted) {
+    let idx = times.findIndex((t, i) => elapsed >= t && elapsed <= times[i + 1]);
+    if (idx < 0) idx = Math.max(0, times.length - 2);
+
+    const t0 = times[idx];
+    const t1 = times[idx + 1];
+    const a = t1 > t0 ? (elapsed - t0) / (t1 - t0) : 0;
+
+    shipPos = pts[idx].clone().lerp(pts[idx + 1], a);
+    visiblePts = [...pts.slice(0, idx + 1), shipPos];
+  }
+
+  const baseColor = sol.color || "#66d9e8";
+
   /* ============================================================= */
   return (
     <group>
-      {/* thin dashed outline of full trajectory */}
+      {/* full dashed outline */}
       <Line
         points={pts}
         color={baseColor}
-        lineWidth={0.2}
         dashed
         dashSize={0.02}
         gapSize={0.02}
+        lineWidth={0.2}
         transparent
         opacity={0.25}
         toneMapped={false}
       />
 
-      {/* visible trajectory so far */}
+      {/* visible trajectory (either first point or real progress) */}
       <Line
-        key={`${sol.id}-progress`}
         points={visiblePts}
         color={baseColor}
         lineWidth={1.8}
@@ -178,15 +169,17 @@ export default function SolutionPath({
         toneMapped={false}
       />
 
-      {/* spacecraft marker — ONLY this triggers epoch tooltip */}
-      {showShip && (
+      {/* SHIP — only after start */}
+      {solutionStarted && showShip && (
         <mesh
           position={shipPos}
           onPointerOver={(e) => {
             e.stopPropagation();
-            if (currentLegIndex != null) setHoveredLeg(currentLegIndex); // highlight current leg
+            if (currentLegIndex != null) setHoveredLeg(currentLegIndex);
+
             const leg = currentLegIndex != null ? legs[currentLegIndex] : undefined;
             const tofDays = leg ? (leg.t1 - leg.t0) / SECONDS_PER_DAY : 0;
+
             onHover?.(
               {
                 solutionName: sol.name,
@@ -195,7 +188,7 @@ export default function SolutionPath({
                 fromBody: leg?.fromBody,
                 toBody: leg?.toBody,
                 tofDays,
-                kind: "ship", // 👈 distinct type for epoch tooltip
+                kind: "ship",
               },
               (e as any).clientX,
               (e as any).clientY
@@ -212,59 +205,58 @@ export default function SolutionPath({
         </mesh>
       )}
 
-      {/* hoverable legs + highlight (these DO trigger section tooltip: planets + TOF) */}
-      {legs.map((leg, i) => {
-        const isHovered = hoveredLeg === i;
-        const tofDays = (leg.t1 - leg.t0) / SECONDS_PER_DAY;
+      {/* LEGS (hoverable) — only after start */}
+      {solutionStarted &&
+        legs.map((leg, i) => {
+          const isHovered = hoveredLeg === i;
+          const tofDays = (leg.t1 - leg.t0) / SECONDS_PER_DAY;
 
-        return (
-          <group key={`${sol.id}-leg-${i}`}>
-            {/* bright highlight for the whole section when hovered */}
-            {isHovered && (
+          return (
+            <group key={i}>
+              {isHovered && (
+                <Line
+                  points={leg.pts}
+                  color={baseColor}
+                  lineWidth={4.2}
+                  transparent
+                  opacity={0.9}
+                  toneMapped={false}
+                />
+              )}
+
               <Line
                 points={leg.pts}
                 color={baseColor}
-                lineWidth={4.2}
+                lineWidth={3.5}
                 transparent
-                opacity={0.9}
+                opacity={0}
                 toneMapped={false}
+                onPointerOver={(e) => {
+                  e.stopPropagation();
+                  setHoveredLeg(i);
+                  onHover?.(
+                    {
+                      solutionName: sol.name,
+                      color: baseColor,
+                      legIndex: i + 1,
+                      fromBody: leg.fromBody,
+                      toBody: leg.toBody,
+                      tofDays,
+                      kind: "leg",
+                    },
+                    (e as any).clientX,
+                    (e as any).clientY
+                  );
+                }}
+                onPointerOut={(e) => {
+                  e.stopPropagation();
+                  setHoveredLeg(null);
+                  onUnhover?.();
+                }}
               />
-            )}
-
-            {/* invisible hit zone to set the highlight + trigger TOF tooltip */}
-            <Line
-              points={leg.pts}
-              color={baseColor}
-              lineWidth={3.5}
-              transparent
-              opacity={0}
-              toneMapped={false}
-              onPointerOver={(e) => {
-                e.stopPropagation();
-                setHoveredLeg(i);
-                onHover?.(
-                  {
-                    solutionName: sol.name,
-                    color: baseColor,
-                    legIndex: i + 1,
-                    fromBody: leg.fromBody,
-                    toBody: leg.toBody,
-                    tofDays,
-                    kind: "leg", // 👈 distinct type for section tooltip
-                  },
-                  (e as any).clientX,
-                  (e as any).clientY
-                );
-              }}
-              onPointerOut={(e) => {
-                e.stopPropagation();
-                setHoveredLeg(null);
-                onUnhover?.();
-              }}
-            />
-          </group>
-        );
-      })}
+            </group>
+          );
+        })}
     </group>
   );
 }
