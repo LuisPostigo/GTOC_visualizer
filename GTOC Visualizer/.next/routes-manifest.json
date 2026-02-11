@@ -46,6 +46,12 @@
       "namedRegex": "^/favicon\\.ico(?:/)?$"
     },
     {
+      "page": "/gtoc/project",
+      "regex": "^/gtoc/project(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/gtoc/project(?:/)?$"
+    },
+    {
       "page": "/gtoc/viewer",
       "regex": "^/gtoc/viewer(?:/)?$",
       "routeKeys": {},

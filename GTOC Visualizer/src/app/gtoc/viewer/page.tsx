@@ -1,6 +1,6 @@
 "use client";
 
-import MainClient from "@/components/gtoc/mainClient";
+import MainClient from "@/components/gtoc/MainClient";
 
 export default function ViewerPage() {
   return (

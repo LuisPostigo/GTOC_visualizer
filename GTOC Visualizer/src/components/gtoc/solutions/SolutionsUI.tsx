@@ -97,7 +97,7 @@ export default function SolutionsUI() {
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   return (
-    <div className="absolute top-3 right-3 z-[70] pointer-events-auto bg-black/70 border border-white/10 rounded-xl p-3 w-80 text-white">
+    <div className="absolute top-16 right-3 z-[70] pointer-events-auto bg-black/70 border border-white/10 rounded-xl p-3 w-80 text-white">
       {/* Header */}
       <div className="flex justify-between items-center mb-2">
         <h3 className="font-semibold text-sm">Solutions</h3>
@@ -141,11 +141,10 @@ export default function SolutionsUI() {
             {/* 👁️ Visibility toggle */}
             <button
               onClick={() => toggle(s.id)}
-              className={`px-1 rounded border ${
-                visible[s.id]
+              className={`px-1 rounded border ${visible[s.id]
                   ? "border-white/20 hover:bg-white/10"
                   : "border-white/10 text-white/50 hover:bg-white/5"
-              }`}
+                }`}
             >
               {visible[s.id] ? "👁" : "🚫"}
             </button>

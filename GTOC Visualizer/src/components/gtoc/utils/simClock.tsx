@@ -83,6 +83,7 @@ export type SimClockOpts = {
   snapPlayToMilestones?: boolean;
   milestoneStepsPerSec?: number;
   playing?: boolean;
+  startPlaying?: boolean;
   /** Rate in days per second (default: 50). */
   rate0?: number;
 };
@@ -100,6 +101,7 @@ export function useSimClock(opts: SimClockOpts = {}) {
     snapPlayToMilestones = false,
     milestoneStepsPerSec = 2,
     playing = true,
+    startPlaying,
     rate0 = 50,
   } = opts;
 
@@ -107,7 +109,7 @@ export function useSimClock(opts: SimClockOpts = {}) {
   const [jd, _setJD] = useState<number>(() =>
     clamp(jd0 ?? JD_EPOCH_0, jdMin, jdMax)
   );
-  const [isPlaying, _setPlaying] = useState<boolean>(playing);
+  const [isPlaying, _setPlaying] = useState<boolean>(startPlaying ?? playing);
   const [rate, _setRate] = useState<number>(rate0); // days per second
 
   /* Refs to avoid stale closures */

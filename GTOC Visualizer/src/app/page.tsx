@@ -1,12 +1,10 @@
 // src/app/gtoc/viewer/page.tsx
 "use client";
 
-import MainCanvasWrapper from "@/components/gtoc/MainCanvasWrapper";
+import LandingPage from "@/components/gtoc/LandingPage";
 
 export default function ViewerPage() {
   return (
-    <div className="w-full h-screen bg-black">
-      <MainCanvasWrapper />
-    </div>
+    <LandingPage />
   );
 }

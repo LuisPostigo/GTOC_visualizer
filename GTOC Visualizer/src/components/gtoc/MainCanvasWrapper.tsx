@@ -2,8 +2,10 @@
 
 import dynamic from "next/dynamic";
 
-const ViewerCanvas = dynamic(() => import("./viewerCanvas"), {
+const ViewerCanvas = dynamic(() => import("./ViewerCanvas"), {
   ssr: false,
 });
 
-export default ViewerCanvas;
+export default function MainCanvasWrapper(props: any) {
+  return <ViewerCanvas {...props} />;
+}

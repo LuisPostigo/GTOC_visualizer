@@ -1,20 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "GTOC Visualizer",
+  "productName": "Vectra",
   "version": "1.2.1",
-  "identifier": "com.luism.gtoc-visualizer",
-
+  "identifier": "com.luism.vectra",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../out"
   },
-
   "app": {
     "windows": [
       {
-        "title": "GTOC Visualizer",
+        "title": "Vectra",
         "width": 1600,
         "height": 1000,
         "resizable": true,
@@ -27,7 +25,6 @@
       "csp": null
     }
   },
-
   "bundle": {
     "active": true,
     "targets": "all",

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMovieStore } from "@/components/gtoc/stores/useMovieStore";
 
 type Props = {
   jd: number;
@@ -200,8 +201,47 @@ export default function HUD({
       aria-label="Time controls"
     >
       {/* Timeline markers */}
-      <div className="max-w-[1400px] mx-auto px-4 pt-1">
+      <div className="max-w-[1400px] mx-auto px-4 pt-1 relative z-20">
         <div className="relative" style={{ height: 40 + RAIL_CENTER_BOTTOM_PX }}>
+          {/* Keyframe Markers Layer - High Z-index to sit ABOVE the rail */}
+          <div className="absolute inset-x-0 pointer-events-none z-50" style={{ bottom: RAIL_CENTER_BOTTOM_PX, height: 0 }}>
+            {useMovieStore((s) => s.keyframes).map((kf) => {
+              const pos = leftPct(kf.jd);
+              const isSelected = Math.abs(jd - kf.jd) < 0.1; // Highlight if closest
+              return (
+                <div
+                  key={kf.jd}
+                  className="absolute -translate-x-1/2 pointer-events-auto flex flex-col items-center justify-end"
+                  style={{ left: `${pos}%`, bottom: 0 }}
+                >
+                  {/* Visual Line */}
+                  <div
+                    className={`w-[2px] h-4 mb-1 rounded-full shadow-sm ${isSelected ? "bg-yellow-400" : "bg-emerald-400"}`}
+                  />
+
+                  {/* Click Target - Invisible but large */}
+                  <button
+                    className="absolute bottom-[-10px] w-8 h-10 -translate-x-[0px]"
+                    title={`${jdToISO(kf.jd)}\nShift+Click to Delete`}
+                    aria-label={`Jump to ${jdToISO(kf.jd)}`}
+                    onClick={(e) => {
+                      e.stopPropagation(); // Stop rail click
+                      if (e.shiftKey) {
+                        if (confirm("Delete this keyframe?")) useMovieStore.getState().removeKeyframe(kf.id);
+                      } else {
+                        jumpTo(kf.jd);
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (confirm("Delete this keyframe?")) useMovieStore.getState().removeKeyframe(kf.id);
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
           <div className="absolute inset-x-0" style={{ bottom: RAIL_CENTER_BOTTOM_PX, height: 0 }}>
             {markers.map(({ jd: mjd, label, kind }, i) => {
               const pos = leftPct(mjd);
@@ -213,8 +253,8 @@ export default function HUD({
               const textColor = isCustom
                 ? "text-emerald-200"
                 : isStart || isEnd
-                ? "text-white/90"
-                : "text-white/70";
+                  ? "text-white/90"
+                  : "text-white/70";
 
               const text =
                 label ??
