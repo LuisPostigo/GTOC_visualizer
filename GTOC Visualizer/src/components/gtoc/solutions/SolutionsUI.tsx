@@ -91,6 +91,9 @@ export default function SolutionsUI() {
     toggle,
     deleteSolution,
     recolorSolution,
+    integratorSteps,
+    setIntegratorSteps,
+    repropagateAll,
   } = useSolutions() as any;
 
   const [openPicker, setOpenPicker] = useState<string | null>(null);
@@ -114,6 +117,26 @@ export default function SolutionsUI() {
             }}
           />
         </label>
+      </div>
+
+      {/* Integrator Control */}
+      <div className="mb-3 px-1">
+        <div className="flex justify-between text-[10px] text-white/50 mb-1">
+          <span>Integrator Steps</span>
+          <span>{integratorSteps}</span>
+        </div>
+        <input
+          type="range"
+          min="10"
+          max="500"
+          step="10"
+          value={integratorSteps}
+          onChange={(e) => setIntegratorSteps(parseInt(e.target.value))}
+          onMouseUp={() => repropagateAll()}
+          onTouchEnd={() => repropagateAll()}
+          className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/20 accent-blue-500"
+          title="Adjust integration precision (higher = slower but more accurate)"
+        />
       </div>
 
       {/* List */}
@@ -142,8 +165,8 @@ export default function SolutionsUI() {
             <button
               onClick={() => toggle(s.id)}
               className={`px-1 rounded border ${visible[s.id]
-                  ? "border-white/20 hover:bg-white/10"
-                  : "border-white/10 text-white/50 hover:bg-white/5"
+                ? "border-white/20 hover:bg-white/10"
+                : "border-white/10 text-white/50 hover:bg-white/5"
                 }`}
             >
               {visible[s.id] ? "👁" : "🚫"}

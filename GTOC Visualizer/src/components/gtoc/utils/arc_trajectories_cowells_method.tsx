@@ -12,39 +12,56 @@ function norm(v: number[]): number {
   return Math.sqrt(v.reduce((acc, val) => acc + val * val, 0));
 }
 
-/** Two-body gravitational dynamics under central body */
-function twoBodyDynamics(_t: number, state: number[], mu: number): number[] {
-  const [rx, ry, rz, vx, vy, vz] = state;
-  const rNorm = norm([rx, ry, rz]);
-  const factor = -mu / Math.pow(rNorm, 3);
-  const ax = factor * rx;
-  const ay = factor * ry;
-  const az = factor * rz;
-  return [vx, vy, vz, ax, ay, az];
+/** Two-body gravitational dynamics under central body (optimized) */
+function twoBodyDynamicsInPlace(y: number[], mu: number, out: number[]): void {
+  const rx = y[0], ry = y[1], rz = y[2];
+  const r2 = rx * rx + ry * ry + rz * rz;
+  const rInv3 = -mu / (r2 * Math.sqrt(r2));
+
+  out[0] = y[3];
+  out[1] = y[4];
+  out[2] = y[5];
+  out[3] = rInv3 * rx;
+  out[4] = rInv3 * ry;
+  out[5] = rInv3 * rz;
 }
 
-/** One RK4 step */
-function rk4Step(
-  f: (t: number, y: number[], mu: number) => number[],
-  t: number,
+/** One RK4 step (optimized for memory) */
+function rk4StepOptimized(
   y: number[],
   dt: number,
-  mu: number
-): number[] {
-  const k1 = f(t, y, mu);
-  const k2 = f(t + dt / 2, y.map((yi, i) => yi + (dt / 2) * k1[i]), mu);
-  const k3 = f(t + dt / 2, y.map((yi, i) => yi + (dt / 2) * k2[i]), mu);
-  const k4 = f(t + dt, y.map((yi, i) => yi + dt * k3[i]), mu);
-  return y.map(
-    (yi, i) => yi + (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])
-  );
+  mu: number,
+  k1: number[],
+  k2: number[],
+  k3: number[],
+  k4: number[],
+  tmp: number[]
+): void {
+  // k1 = f(t, y)
+  twoBodyDynamicsInPlace(y, mu, k1);
+
+  // k2 = f(t + dt/2, y + dt/2 * k1)
+  for (let i = 0; i < 6; i++) tmp[i] = y[i] + (dt * 0.5) * k1[i];
+  twoBodyDynamicsInPlace(tmp, mu, k2);
+
+  // k3 = f(t + dt/2, y + dt/2 * k2)
+  for (let i = 0; i < 6; i++) tmp[i] = y[i] + (dt * 0.5) * k2[i];
+  twoBodyDynamicsInPlace(tmp, mu, k3);
+
+  // k4 = f(t + dt, y + dt * k3)
+  for (let i = 0; i < 6; i++) tmp[i] = y[i] + dt * k3[i];
+  twoBodyDynamicsInPlace(tmp, mu, k4);
+
+  // y = y + dt/6 * (k1 + 2k2 + 2k3 + k4)
+  const dt6 = dt / 6;
+  for (let i = 0; i < 6; i++) {
+    y[i] += dt6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
+  }
 }
 
 /**
  * Propagate an arc using fixed RK4 with *finer internal steps*
  * and output only at the same sampling times the Python code uses.
- *
- * Python did: t_eval = linspace(0, dt, samples)[:-1]
  */
 export function propagateArcCowell(
   r0: number[],
@@ -58,14 +75,17 @@ export function propagateArcCowell(
     (dt * i) / (samples - 1)
   ).slice(0, -1); // drop final dt like Python
 
-  const y0 = [...r0, ...v0];
+  const state = [...r0, ...v0];
   const results: { t: number; state: number[] }[] = [];
 
-  let t = 0;
-  let state = y0;
+  // Pre-allocate buffers for RK4 to avoid GC thrashing
+  const k1 = new Array(6).fill(0);
+  const k2 = new Array(6).fill(0);
+  const k3 = new Array(6).fill(0);
+  const k4 = new Array(6).fill(0);
+  const tmp = new Array(6).fill(0);
 
-  // internal integration step (finer than output spacing)
-  // 50 is arbitrary but safe; increase if still spiky
+  let t = 0;
   const maxInternalStep = dt / (samples * 50);
 
   let nextOutIndex = 0;
@@ -75,8 +95,8 @@ export function propagateArcCowell(
     const targetT = tEval[nextOutIndex];
     const h = Math.min(maxInternalStep, targetT - t);
 
-    // integrate one small step
-    state = rk4Step(twoBodyDynamics, t, state, h, mu);
+    // integrate one small step (optimized)
+    rk4StepOptimized(state, h, mu, k1, k2, k3, k4, tmp);
     t += h;
 
     // snap to target time if we're very close

@@ -49,7 +49,9 @@ export default function PresentationOverlay() {
                     height: "100%",
                     backgroundColor: "black",
                     opacity: presentationOpacity,
-                    transition: "opacity 1.5s ease-in-out",
+                    // Disable transition when opacity is 1 (instant black on start/reset)
+                    // Enable transition when fading out (opacity < 1)
+                    transition: presentationOpacity === 1 ? "none" : "opacity 1.5s ease-in-out",
                 }}
             />
 

@@ -18,6 +18,22 @@ export interface LogoEntry {
     scale: number;
 }
 
+export interface TextBoxEntry {
+    id: string;
+    text: string;
+    position: { x: number; y: number };
+    scale: number; // Overall scale (box size)
+    color: string;
+    // New style props
+    fontFamily: string; // 'Inter', 'Outfit', 'Serif', 'Mono'
+    fontWeight: number; // 400, 700
+    isItalic: boolean;
+    textAlign: "left" | "center" | "right";
+    fontSize: number; // Relative font size multiplier default 1
+    width?: number; // % of screen width (or similar relative unit)
+    height?: number; // % of screen height
+}
+
 interface MovieState {
     isMovieMode: boolean;
     isPresentationMode: boolean;
@@ -44,11 +60,22 @@ interface MovieState {
     setLogoPosition: (pos: { x: number; y: number }) => void;
     setLogoScale: (scale: number) => void;
 
+    textBoxes: TextBoxEntry[];
+    selectedTextBoxId: string | null;
+    addTextBox: (text?: string) => void;
+    updateTextBox: (id: string, patch: Partial<TextBoxEntry>) => void;
+    removeTextBox: (id: string) => void;
+    selectTextBox: (id: string | null) => void;
+
     toggleMovieMode: (active?: boolean) => void;
     togglePresentationMode: (active?: boolean) => void;
 
     presentationOpacity: number;
     setPresentationOpacity: (opacity: number) => void;
+
+    timelineStartJD: number | null;
+    timelineEndJD: number | null;
+    setTimelineRange: (start: number | null, end: number | null) => void;
 
     setRecording: (isRecording: boolean, progress?: number) => void;
     setRecordingProgress: (progress: number) => void;
@@ -99,10 +126,14 @@ function nextLogoId() {
 const defaultPersisted = {
     isMovieMode: false,
     logos: [] as LogoEntry[],
+    textBoxes: [] as TextBoxEntry[],
+    selectedTextBoxId: null as string | null,
     aspectRatio: ASPECT_RATIOS["16:9"],
     keyframes: [] as Keyframe[],
     missionName: "",
     missionNameSize: 32,
+    timelineStartJD: null as number | null,
+    timelineEndJD: null as number | null,
 };
 
 type PersistedMovieState = typeof defaultPersisted;
@@ -124,6 +155,10 @@ export const useMovieStore = create<MovieState>()(
             logoPosition: { x: 0.05, y: 0.05 },
             logoScale: 1,
 
+            timelineStartJD: null,
+            timelineEndJD: null,
+            setTimelineRange: (start, end) => set({ timelineStartJD: start, timelineEndJD: end }),
+
             keyframes: [],
             captureKeyframeTrigger: 0,
             nearbyKeyframeId: null,
@@ -131,7 +166,15 @@ export const useMovieStore = create<MovieState>()(
             toggleMovieMode: (active) =>
                 set((state) => ({ isMovieMode: active ?? !state.isMovieMode })),
             togglePresentationMode: (active) =>
-                set((state) => ({ isPresentationMode: active ?? !state.isPresentationMode })),
+                set((state) => {
+                    const next = active ?? !state.isPresentationMode;
+                    return {
+                        isPresentationMode: next,
+                        // If entering presentation mode, start with black screen (opacity 1)
+                        // to prevent "flash" of content before fade-in.
+                        presentationOpacity: next ? 1 : state.presentationOpacity
+                    };
+                }),
 
             presentationOpacity: 0,
             setPresentationOpacity: (opacity) => set({ presentationOpacity: opacity }),
@@ -192,6 +235,42 @@ export const useMovieStore = create<MovieState>()(
                 const logos = get().logos;
                 if (logos.length > 0) get().updateLogo(logos[0].id, { scale });
             },
+
+            // ---- Text Boxes ----
+            textBoxes: [],
+            selectedTextBoxId: null,
+            addTextBox: (text = "New Text") =>
+                set((state) => {
+                    const id = `text-${Date.now()}-${Math.random()}`;
+                    return {
+                        textBoxes: [
+                            ...state.textBoxes,
+                            {
+                                id,
+                                text,
+                                position: { x: 0.5, y: 0.5 },
+                                scale: 1,
+                                color: "#ffffff",
+                                fontFamily: "Inter",
+                                fontWeight: 700,
+                                isItalic: false,
+                                textAlign: "center",
+                                fontSize: 1,
+                            },
+                        ],
+                        selectedTextBoxId: id, // Auto-select new box
+                    };
+                }),
+            updateTextBox: (id, patch) =>
+                set((state) => ({
+                    textBoxes: state.textBoxes.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+                })),
+            removeTextBox: (id) =>
+                set((state) => ({
+                    textBoxes: state.textBoxes.filter((t) => t.id !== id),
+                    selectedTextBoxId: state.selectedTextBoxId === id ? null : state.selectedTextBoxId,
+                })),
+            selectTextBox: (id) => set({ selectedTextBoxId: id }),
 
             setRecording: (isRecording, progress = 0) =>
                 set({ isRecording, recordingProgress: progress }),
@@ -283,8 +362,12 @@ export const useMovieStore = create<MovieState>()(
                 logos: state.logos
                     .filter((l) => !l.url.startsWith("blob:"))
                     .map(({ id, url, position, scale }) => ({ id, url, position, scale })),
+                textBoxes: state.textBoxes,
+                selectedTextBoxId: null, // Don't persist selection across reloads
                 aspectRatio: state.aspectRatio,
                 keyframes: state.keyframes,
+                timelineStartJD: state.timelineStartJD,
+                timelineEndJD: state.timelineEndJD,
             }),
         }
     )

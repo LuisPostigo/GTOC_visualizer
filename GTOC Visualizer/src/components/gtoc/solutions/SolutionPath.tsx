@@ -397,7 +397,7 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
       missionDays: (currentJD - epochZeroJD),
       legDistAU: leg?.dist ?? 0,
       kind: "ship",
-      shipPosition: [pos.x / SCALE, pos.y / SCALE, pos.z / SCALE],
+      shipPosition: [pos.x, pos.y, pos.z],  // pos is already in AU (built from scaled pts[])
       shipVelocity: velocityKmS,
       legProgress,
     };
@@ -421,7 +421,7 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
         />
       ))}
 
-      {visiblePts.length >= 2 && <Line points={visiblePts} color={baseColor} dashed={false} lineWidth={2.8} transparent opacity={0.95} toneMapped={false} />}
+      {(sol.showPath ?? true) && visiblePts.length >= 2 && <Line points={visiblePts} color={baseColor} dashed={false} lineWidth={sol.lineWidth || 2.8} transparent opacity={0.95} toneMapped={false} />}
 
       {solutionStarted && showShip && (
         <group ref={shipGroupRef}>

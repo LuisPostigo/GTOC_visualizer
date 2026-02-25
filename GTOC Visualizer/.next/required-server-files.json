@@ -100,7 +100,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/luispostigo/Documents/Auburn_Research/GTOC_visualizer/GTOC Visualizer",
+    "outputFileTracingRoot": "/home/luis/Documents/GTOC_visualizer/GTOC Visualizer",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -159,7 +159,7 @@
       "proxyPrefetch": "flexible",
       "optimisticClientCache": true,
       "manualClientBasePath": false,
-      "cpus": 15,
+      "cpus": 19,
       "memoryBasedWorkersCount": false,
       "imgOptConcurrency": null,
       "imgOptTimeoutInSeconds": 7,
@@ -291,11 +291,11 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/Users/luispostigo/Documents/Auburn_Research/GTOC_visualizer/GTOC Visualizer"
+      "root": "/home/luis/Documents/GTOC_visualizer/GTOC Visualizer"
     },
     "distDirRoot": "out"
   },
-  "appDir": "/Users/luispostigo/Documents/Auburn_Research/GTOC_visualizer/GTOC Visualizer",
+  "appDir": "/home/luis/Documents/GTOC_visualizer/GTOC Visualizer",
   "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",

@@ -12,5 +12,8 @@ export type Solution = {
   id: string;
   name: string;
   color: string;
+  lineWidth?: number;
+  showPath?: boolean;
   samples: SamplePt[];
+  rawSamples?: SamplePt[];
 };

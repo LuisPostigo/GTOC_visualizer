@@ -105,6 +105,123 @@ const IconCalendar = () => (
   </svg>
 );
 
+function TimelineRangeBar({ jdMin, jdMax, railRef }: { jdMin: number, jdMax: number, railRef: React.RefObject<HTMLDivElement | null> }) {
+  const { isMovieMode, timelineStartJD, timelineEndJD, setTimelineRange } = useMovieStore();
+
+  const [dragMode, setDragMode] = useState<"start" | "end" | "move" | null>(null);
+  const dragStartRef = useRef<{ x: number, startJD: number, endJD: number } | null>(null);
+
+  // Initialize defaults if null when entering movie mode
+  useEffect(() => {
+    if (isMovieMode && (timelineStartJD === null || timelineEndJD === null)) {
+      setTimelineRange(jdMin, jdMax);
+    }
+  }, [isMovieMode, timelineStartJD, timelineEndJD, jdMin, jdMax, setTimelineRange]);
+
+  if (!isMovieMode) return null;
+
+  // Safe defaults for rendering
+  const tStart = timelineStartJD ?? jdMin;
+  const tEnd = timelineEndJD ?? jdMax;
+
+  // Convert JD to %
+  const getPct = (jd: number) => {
+    return clamp(((jd - jdMin) / (jdMax - jdMin)) * 100, 0, 100);
+  };
+
+  const startPct = getPct(tStart);
+  const endPct = getPct(tEnd);
+  const widthPct = Math.max(0, endPct - startPct);
+
+  const handlePointerDown = (e: React.PointerEvent, mode: "start" | "end" | "move") => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setDragMode(mode);
+    dragStartRef.current = { x: e.clientX, startJD: tStart, endJD: tEnd };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragMode || !dragStartRef.current || !railRef.current) return;
+
+    const railWidth = railRef.current.getBoundingClientRect().width;
+    const dxPx = e.clientX - dragStartRef.current.x;
+    // Avoid divide by zero if railWidth is somehow 0
+    if (railWidth < 1) return;
+
+    const dxJD = (dxPx / railWidth) * (jdMax - jdMin);
+
+    let newStart = dragStartRef.current.startJD;
+    let newEnd = dragStartRef.current.endJD;
+
+    if (dragMode === "start") {
+      newStart += dxJD;
+      newStart = clamp(newStart, jdMin, newEnd - (jdMax - jdMin) * 0.01); // Min 1% width
+    } else if (dragMode === "end") {
+      newEnd += dxJD;
+      newEnd = clamp(newEnd, newStart + (jdMax - jdMin) * 0.01, jdMax);
+    } else if (dragMode === "move") {
+      newStart += dxJD;
+      newEnd += dxJD;
+
+      // Clamp entire bar to bounds
+      if (newStart < jdMin) {
+        const diff = jdMin - newStart;
+        newStart += diff;
+        newEnd += diff;
+      }
+      if (newEnd > jdMax) {
+        const diff = newEnd - jdMax;
+        newStart -= diff;
+        newEnd -= diff;
+      }
+    }
+
+    setTimelineRange(newStart, newEnd);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    setDragMode(null);
+    dragStartRef.current = null;
+  };
+
+  return (
+    <div
+      className="absolute inset-y-0"
+      style={{ left: `${startPct}%`, width: `${widthPct}%`, zIndex: 20 }}
+    >
+      {/* Bar Body (Move) */}
+      <div
+        className="absolute inset-0 bg-violet-500/50 hover:bg-violet-500/70 cursor-grab active:cursor-grabbing rounded-sm backdrop-blur-[1px] border-t border-b border-violet-400/50"
+        onPointerDown={(e) => handlePointerDown(e, "move")}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      />
+
+      {/* Left Handle */}
+      <div
+        className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-6 cursor-ew-resize flex items-center justify-center group z-30"
+        onPointerDown={(e) => handlePointerDown(e, "start")}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <div className="w-1.5 h-4 bg-violet-200 rounded-full shadow-md group-hover:bg-white transition-colors" />
+      </div>
+
+      {/* Right Handle */}
+      <div
+        className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-4 h-6 cursor-ew-resize flex items-center justify-center group z-30"
+        onPointerDown={(e) => handlePointerDown(e, "end")}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
+        <div className="w-1.5 h-4 bg-violet-200 rounded-full shadow-md group-hover:bg-white transition-colors" />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Heads-Up Display (HUD) for time control and mission timeline.
  * Provides interactive JD scrubbing, playback, and time-step control.
@@ -292,6 +409,8 @@ export default function HUD({
       {/* Timeline rail */}
       <div className="max-w-[1400px] mx-auto px-4">
         <div ref={railRef} className="relative cursor-pointer" style={{ height: RAIL_BOTTOM_PX + RAIL_HEIGHT_PX }}>
+
+          {/* Base rail */}
           <div
             className="absolute inset-x-0 rounded-full bg-white/12 hover:bg-white/16 transition-colors"
             style={{ bottom: RAIL_BOTTOM_PX, height: RAIL_HEIGHT_PX }}
@@ -300,14 +419,25 @@ export default function HUD({
             onPointerUp={onPointerUpRail}
             onWheel={onWheel}
           >
+            {/* Progress fill (Grayish) */}
             <div className="absolute inset-y-0 left-0 rounded-l-full bg-white/35" style={{ width: `${pct}%` }} />
+
+            {/* Default White Knob */}
             <div
               ref={knobRef}
-              className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-white shadow ring-2 ring-black/30"
+              className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-white shadow ring-2 ring-black/30 z-30"
               style={{ left: `calc(${pct}% - 6px)` }}
               tabIndex={0}
               onKeyDown={onKeyDownKnob}
             />
+
+            {/* MOVIE MODE: Purple Range Bar */}
+            <TimelineRangeBar
+              jdMin={jdMin}
+              jdMax={jdMax}
+              railRef={railRef}
+            />
+
           </div>
         </div>
       </div>

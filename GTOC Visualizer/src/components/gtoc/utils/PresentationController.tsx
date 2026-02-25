@@ -52,15 +52,21 @@ export default function PresentationController({ jd, setJD, setPlaying }: Props)
     useFrame(() => {
         if (!isPresentationMode) return;
 
+        const { timelineStartJD, timelineEndJD } = useMovieStore.getState();
+
         let startJD = 0;
         let endJD = 0;
 
-        if (keyframes.length >= 2) {
+        if (timelineStartJD !== null && timelineEndJD !== null) {
+            startJD = timelineStartJD;
+            endJD = timelineEndJD;
+        } else if (keyframes.length >= 2) {
             startJD = keyframes[0].jd;
             endJD = keyframes[keyframes.length - 1].jd;
         } else {
             startJD = JD_EPOCH_0;
-            endJD = startJD + 60;
+            // Default to 2000 days if nothing set (approx 40s at 50d/s)
+            endJD = startJD + 2000;
         }
 
         if (fadeState.current === "PLAYING" && jd >= endJD) {
@@ -91,7 +97,8 @@ export default function PresentationController({ jd, setJD, setPlaying }: Props)
     useEffect(() => {
         if (!isPresentationMode) return;
 
-        const startJD = keyframes.length >= 2 ? keyframes[0].jd : JD_EPOCH_0;
+        const { timelineStartJD } = useMovieStore.getState();
+        const startJD = timelineStartJD ?? (keyframes.length >= 2 ? keyframes[0].jd : JD_EPOCH_0);
 
         setPresentationOpacity(1);
         fadeState.current = "RESETTING";

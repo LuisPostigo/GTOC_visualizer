@@ -55,9 +55,15 @@ export default function Ribbon({
         toggle,
         deleteSolution,
         recolorSolution,
+        updateSolution,
+        integratorSteps,
+        setIntegratorSteps,
+        repropagateAll,
     } = useSolutions() as any;
     const [openPicker, setOpenPicker] = useState<string | null>(null);
+    const [openTextPicker, setOpenTextPicker] = useState(false);
     const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const textColorBtnRef = useRef<HTMLButtonElement>(null);
 
     // --- Body Selector Logic ---
     const {
@@ -81,7 +87,7 @@ export default function Ribbon({
     if (isPresentationMode) return null;
 
     return (
-        <div className="pointer-events-auto fixed top-0 left-0 right-0 z-[1000] flex flex-col font-sans select-none">
+        <div id="ribbon-ui" className="pointer-events-auto fixed top-0 left-0 right-0 z-[1000] flex flex-col font-sans select-none">
 
             {/* --- TOP BAR (Tabs) --- */}
             <div className="h-10 bg-[#0a0a0c]/95 border-b border-white/10 backdrop-blur-md flex items-center justify-between px-4">
@@ -216,6 +222,29 @@ export default function Ribbon({
                                 </button>
                             </div>
 
+                            {/* Group: Integrator Control */}
+                            <div className="flex flex-col gap-2 min-w-[140px] border-r border-white/10 pr-6">
+                                <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-auto">Integrator Steps</span>
+                                <div className="flex flex-col justify-center h-[64px] w-full px-2">
+                                    <div className="flex justify-between text-[10px] text-white/50 mb-1">
+                                        <span>Steps</span>
+                                        <span className="font-mono text-white/80">{integratorSteps}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="1000"
+                                        step="10"
+                                        value={integratorSteps}
+                                        onChange={(e) => setIntegratorSteps(parseInt(e.target.value))}
+                                        onMouseUp={() => repropagateAll()}
+                                        onTouchEnd={() => repropagateAll()}
+                                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/20 accent-blue-500"
+                                        title="Adjust integration precision (higher = slower but more accurate)"
+                                    />
+                                </div>
+                            </div>
+
                             {/* Group: Loaded Solutions */}
                             <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
                                 <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">Loaded Solutions</span>
@@ -233,7 +262,7 @@ export default function Ribbon({
                                             {/* Name */}
                                             <span className="text-xs text-white/90 truncate flex-1 font-mono" title={s.name}>{s.name}</span>
 
-                                            {/* Visibility */}
+                                            {/* Visibility (Main) */}
                                             <button onClick={() => toggle(s.id)} className="text-white/40 hover:text-white transition-colors" title="Toggle Visibility">
                                                 {visible[s.id] ? (
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -241,6 +270,32 @@ export default function Ribbon({
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22" /></svg>
                                                 )}
                                             </button>
+
+                                            {/* Path Visibility */}
+                                            <button
+                                                onClick={() => updateSolution(s.id, { showPath: !(s.showPath ?? true) })}
+                                                className={`transition-colors ${s.showPath !== false ? "text-white/60 hover:text-white" : "text-white/20 hover:text-white/50"}`}
+                                                title="Toggle Path Visibility"
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" opacity="0" />{/* Spacer */}
+                                                    <polyline points="5 5 9 9 13 5 17 9" />
+                                                </svg>
+                                            </button>
+
+                                            {/* Line Width Slider */}
+                                            <input
+                                                type="range"
+                                                min="0.5"
+                                                max="8"
+                                                step="0.1"
+                                                value={s.lineWidth || 2.8}
+                                                onChange={(e) => updateSolution(s.id, { lineWidth: parseFloat(e.target.value) })}
+                                                className="w-12 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/20 accent-emerald-500"
+                                                title={`Line Width: ${s.lineWidth || 2.8}`}
+                                                onClick={(e) => e.stopPropagation()} // Prevent expansion/color picker
+                                            />
 
                                             {/* Delete */}
                                             <button onClick={() => deleteSolution(s.id)} className="text-white/20 hover:text-red-400 transition-colors" title="Delete">
@@ -298,31 +353,303 @@ export default function Ribbon({
                             </div>
 
                             {/* Group: Assets */}
-                            <div className="flex flex-col gap-2 min-w-[100px] border-r border-white/10 pr-6">
-                                <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-auto">Assets</span>
-                                <label className={`flex flex-col items-center justify-center h-[64px] w-[64px] rounded border transition-colors cursor-pointer group
-                                    ${logos.length > 0 ? "bg-white/10 border-white/20" : "hover:bg-white/5 border-white/5 text-white/50 hover:text-white"}`}
-                                >
-                                    {logos.length > 0 ? (
-                                        <img src={logos[0].url} className="w-8 h-8 object-contain mb-1" alt="Logo" />
-                                    ) : (
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-1">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                            <div className="flex flex-col gap-2 min-w-[140px] border-r border-white/10 pr-6">
+                                <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-auto">
+                                    Assets
+                                </span>
+
+                                <div className="flex gap-2 h-[64px]">
+                                    {/* Add Logo */}
+                                    <label
+                                        className={`flex flex-col items-center justify-center h-full w-[64px] rounded border transition-colors cursor-pointer group
+                                ${logos.length > 0
+                                                ? "bg-white/10 border-white/20 text-white"
+                                                : "hover:bg-white/5 border-white/5 text-white/50 hover:text-white"
+                                            }`}
+                                    >
+                                        {logos.length > 0 ? (
+                                            <img
+                                                src={logos[0].url}
+                                                className="w-8 h-8 object-contain mb-1"
+                                                alt="Logo"
+                                            />
+                                        ) : (
+                                            <svg
+                                                width="24"
+                                                height="24"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="1.5"
+                                                className="mb-1"
+                                            >
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                <polyline points="17 8 12 3 7 8" />
+                                                <line x1="12" y1="3" x2="12" y2="15" />
+                                            </svg>
+                                        )}
+                                        <span className="text-[10px]">
+                                            {logos.length > 0 ? `Logos (${logos.length})` : "Upload Logo"}
+                                        </span>
+
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (f) {
+                                                    const reader = new FileReader();
+                                                    reader.onload = (ev) => {
+                                                        if (ev.target?.result)
+                                                            useMovieStore.getState().addLogo(ev.target.result as string);
+                                                    };
+                                                    reader.readAsDataURL(f);
+                                                }
+                                                e.target.value = "";
+                                            }}
+                                        />
+                                    </label>
+
+                                    {/* Add Text Box */}
+                                    <button
+                                        onClick={() => useMovieStore.getState().addTextBox()}
+                                        className="flex flex-col items-center justify-center h-full w-[64px] rounded border border-white/5 hover:bg-white/5 hover:border-white/20 text-white/50 hover:text-white transition-colors"
+                                        title="Add Text Box"
+                                    >
+                                        <svg
+                                            width="24"
+                                            height="24"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            className="mb-1"
+                                        >
+                                            <path d="M4 7V4h16v3" />
+                                            <path d="M9 20h6" />
+                                            <path d="M12 4v16" />
                                         </svg>
-                                    )}
-                                    <span className="text-[10px]">{logos.length > 0 ? `Logos (${logos.length})` : "Upload Logo"}</span>
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) {
-                                            const reader = new FileReader();
-                                            reader.onload = (ev) => {
-                                                if (ev.target?.result) useMovieStore.getState().addLogo(ev.target.result as string);
-                                            };
-                                            reader.readAsDataURL(f);
-                                        }
-                                        e.target.value = "";
-                                    }} />
-                                </label>
+                                        <span className="text-[10px]">Add Text</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Group: Text Tools */}
+                            <div
+                                className={`flex flex-col gap-2 min-w-[260px] border-r border-white/10 pr-6
+                                ${useMovieStore.getState().selectedTextBoxId ? "" : "opacity-30 pointer-events-none"}`}
+                            >
+                                <span className="text-[10px] text-emerald-400 uppercase tracking-wider font-bold mb-auto">
+                                    Text Tools
+                                </span>
+
+                                <div className="flex gap-2 h-[64px] items-center">
+
+                                    {/* Font + Style */}
+                                    <div className="flex flex-col gap-1 w-24">
+
+                                        {/* Font Family */}
+                                        <select
+                                            className="h-6 px-2 text-[10px] rounded
+                                                    bg-white/5 border border-white/5
+                                                    text-white
+                                                    hover:border-white/20
+                                                    focus:outline-none focus:border-emerald-400/40
+                                                    appearance-none"
+                                            value={
+                                                useMovieStore.getState().textBoxes.find(
+                                                    t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                )?.fontFamily || "Inter"
+                                            }
+                                            onChange={(e) =>
+                                                useMovieStore.getState().selectedTextBoxId &&
+                                                useMovieStore.getState().updateTextBox(
+                                                    useMovieStore.getState().selectedTextBoxId!,
+                                                    { fontFamily: e.target.value }
+                                                )
+                                            }
+                                        >
+                                            <option value="Inter">Inter</option>
+                                            <option value="Outfit">Outfit</option>
+                                            <option value="serif">Serif</option>
+                                            <option value="monospace">Mono</option>
+                                            <option value="cursive">Hand</option>
+                                        </select>
+
+                                        {/* Bold / Italic */}
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => {
+                                                    const id = useMovieStore.getState().selectedTextBoxId;
+                                                    if (!id) return;
+                                                    const box = useMovieStore.getState().textBoxes.find(t => t.id === id);
+                                                    if (box)
+                                                        useMovieStore.getState().updateTextBox(id, {
+                                                            fontWeight: box.fontWeight === 700 ? 400 : 700
+                                                        });
+                                                }}
+                                                className={`flex-1 h-6 rounded border text-[10px] font-bold transition-colors
+                                                ${useMovieStore.getState().textBoxes.find(
+                                                    t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                )?.fontWeight === 700
+                                                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-200"
+                                                        : "border-white/5 text-white/60 hover:bg-white/5 hover:text-white"
+                                                    }`}
+                                            >
+                                                B
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    const id = useMovieStore.getState().selectedTextBoxId;
+                                                    if (!id) return;
+                                                    const box = useMovieStore.getState().textBoxes.find(t => t.id === id);
+                                                    if (box)
+                                                        useMovieStore.getState().updateTextBox(id, {
+                                                            isItalic: !box.isItalic
+                                                        });
+                                                }}
+                                                className={`flex-1 h-6 rounded border text-[10px] italic transition-colors
+                                                ${useMovieStore.getState().textBoxes.find(
+                                                    t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                )?.isItalic
+                                                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-200"
+                                                        : "border-white/5 text-white/60 hover:bg-white/5 hover:text-white"
+                                                    }`}
+                                            >
+                                                I
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Alignment + Size */}
+                                    <div className="flex flex-col gap-1">
+
+                                        {/* Alignment */}
+                                        <div className="flex bg-white/5 rounded border border-white/5 p-0.5">
+                                            {["left", "center", "right"].map((align) => (
+                                                <button
+                                                    key={align}
+                                                    onClick={() =>
+                                                        useMovieStore.getState().selectedTextBoxId &&
+                                                        useMovieStore.getState().updateTextBox(
+                                                            useMovieStore.getState().selectedTextBoxId!,
+                                                            { textAlign: align as any }
+                                                        )
+                                                    }
+                                                    className={`p-1 rounded transition-colors
+                                                    ${useMovieStore.getState().textBoxes.find(
+                                                        t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                    )?.textAlign === align
+                                                            ? "bg-emerald-500/20 text-emerald-200"
+                                                            : "text-white/40 hover:text-white"
+                                                        }`}
+                                                >
+                                                    {align === "left" && (
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <line x1="17" y1="10" x2="3" y2="10" />
+                                                            <line x1="21" y1="6" x2="3" y2="6" />
+                                                            <line x1="21" y1="14" x2="3" y2="14" />
+                                                            <line x1="17" y1="18" x2="3" y2="18" />
+                                                        </svg>
+                                                    )}
+                                                    {align === "center" && (
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <line x1="21" y1="10" x2="3" y2="10" />
+                                                            <line x1="21" y1="6" x2="3" y2="6" />
+                                                            <line x1="21" y1="14" x2="3" y2="14" />
+                                                            <line x1="21" y1="18" x2="3" y2="18" />
+                                                        </svg>
+                                                    )}
+                                                    {align === "right" && (
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <line x1="21" y1="10" x2="7" y2="10" />
+                                                            <line x1="21" y1="6" x2="3" y2="6" />
+                                                            <line x1="21" y1="14" x2="3" y2="14" />
+                                                            <line x1="21" y1="18" x2="7" y2="18" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Font Size */}
+                                        <div className="flex items-center justify-between gap-1 border border-white/5 rounded bg-white/5 px-1 h-6">
+                                            <button
+                                                onClick={() => {
+                                                    const id = useMovieStore.getState().selectedTextBoxId;
+                                                    if (!id) return;
+                                                    const box = useMovieStore.getState().textBoxes.find(t => t.id === id);
+                                                    if (box)
+                                                        useMovieStore.getState().updateTextBox(id, {
+                                                            fontSize: Math.max(0.5, (box.fontSize || 1) - 0.1)
+                                                        });
+                                                }}
+                                                className="w-4 text-white/50 hover:text-white text-[10px]"
+                                            >
+                                                –
+                                            </button>
+
+                                            <span className="text-[9px] w-8 text-center text-white/70">
+                                                {Math.round(
+                                                    (useMovieStore.getState().textBoxes.find(
+                                                        t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                    )?.fontSize || 1) * 100
+                                                )}%
+                                            </span>
+
+                                            <button
+                                                onClick={() => {
+                                                    const id = useMovieStore.getState().selectedTextBoxId;
+                                                    if (!id) return;
+                                                    const box = useMovieStore.getState().textBoxes.find(t => t.id === id);
+                                                    if (box)
+                                                        useMovieStore.getState().updateTextBox(id, {
+                                                            fontSize: Math.min(5, (box.fontSize || 1) + 0.1)
+                                                        });
+                                                }}
+                                                className="w-4 text-white/50 hover:text-white text-[10px]"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Color Picker */}
+                                    <div className="flex flex-col gap-1">
+                                        <button
+                                            ref={textColorBtnRef}
+                                            onClick={() => setOpenTextPicker(!openTextPicker)}
+                                            className="w-8 h-8 rounded bg-white/5 border border-white/5 hover:border-emerald-400/40 transition-colors"
+                                            style={{
+                                                backgroundColor:
+                                                    useMovieStore.getState().textBoxes.find(
+                                                        t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                    )?.color || "#ffffff"
+                                            }}
+                                        />
+
+                                        {openTextPicker &&
+                                            useMovieStore.getState().selectedTextBoxId && (
+                                                <ColorPickerPortal
+                                                    anchorRef={textColorBtnRef as any}
+                                                    color={
+                                                        useMovieStore.getState().textBoxes.find(
+                                                            t => t.id === useMovieStore.getState().selectedTextBoxId
+                                                        )?.color || "#ffffff"
+                                                    }
+                                                    onChange={(c) =>
+                                                        useMovieStore.getState().updateTextBox(
+                                                            useMovieStore.getState().selectedTextBoxId!,
+                                                            { color: c }
+                                                        )
+                                                    }
+                                                    onClose={() => setOpenTextPicker(false)}
+                                                />
+                                            )}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Group: Keyframes */}
@@ -334,9 +661,12 @@ export default function Ribbon({
                                         onClick={() => useMovieStore.getState().triggerKeyframeCapture()}
                                         disabled={!isMovieMode}
                                         className={`flex flex-col items-center justify-center h-[64px] w-[64px] rounded border transition-colors 
-                                        ${!isMovieMode ? "opacity-30 border-white/5 cursor-not-allowed" :
-                                                nearbyKeyframeId ? "border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300"
-                                                    : "border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/20"}`}
+                                            ${!isMovieMode
+                                                ? "opacity-30 border-white/5 cursor-not-allowed"
+                                                : nearbyKeyframeId
+                                                    ? "border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300"
+                                                    : "border-white/5 bg-white/10 hover:bg-white/20 text-white/80"}  // <-- increased bg opacity and icon color
+                                        `}
                                     >
                                         {nearbyKeyframeId ? (
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-1">
@@ -346,16 +676,14 @@ export default function Ribbon({
                                                 <path d="M16 21h5v-5" />
                                             </svg>
                                         ) : (
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-1">
-                                                <circle cx="12" cy="12" r="10" />
-                                                <line x1="12" y1="8" x2="12" y2="16" />
-                                                <line x1="8" y1="12" x2="16" y2="12" />
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mb-1 text-white/80">
+                                                <circle cx="12" cy="12" r="10" stroke="currentColor" />
+                                                <line x1="12" y1="8" x2="12" y2="16" stroke="currentColor" />
+                                                <line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" />
                                             </svg>
                                         )}
-                                        <div className="flex flex-col items-center -space-y-1">
-                                            <span className="text-[9px] text-white/80">{nearbyKeyframeId ? "Update" : "Add"}</span>
-                                            <span className="text-[9px] text-white/40">{keyframes.length}</span>
-                                        </div>
+                                        <span className="text-[9px] text-white/80 mt-1">{nearbyKeyframeId ? "Update" : "Add"}</span>
+                                        <span className="text-[9px] text-white/50 mt-0.5">{keyframes.length}</span>
                                     </button>
 
                                     {/* Delete / Clear Actions Stack */}
@@ -392,26 +720,55 @@ export default function Ribbon({
                             </div>
 
                             {/* Group: Format */}
-                            <div className="flex flex-col gap-2 min-w-[100px] border-r border-white/10 pr-6">
-                                <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-auto">Format</span>
-                                <div className="grid grid-cols-2 gap-1 h-[64px]">
-                                    {[
-                                        { label: "16:9", val: 1.7777 },
-                                        { label: "4:3", val: 1.3333 },
-                                        { label: "2.35", val: 2.35 },
-                                        { label: "1:1", val: 1 },
-                                    ].map((opt) => (
-                                        <button
-                                            key={opt.label}
-                                            onClick={() => useMovieStore.getState().setAspectRatio(opt.val)}
-                                            className={`px-2 py-1 text-[9px] rounded border transition-colors ${Math.abs(aspectRatio - opt.val) < 0.01
-                                                ? "bg-white/20 border-white/40 text-white"
-                                                : "border-white/5 text-white/40 hover:bg-white/5 hover:text-white"
-                                                }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
+                            <div className="flex flex-col gap-2 min-w-[140px] border-r border-white/10 pr-6">
+                                <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-auto">
+                                    Format
+                                </span>
+
+                                <div className="flex gap-2 items-stretch">
+                                    {/* Match Button */}
+                                    <button
+                                        onClick={() =>
+                                            useMovieStore.getState().setAspectRatio(
+                                                window.screen.width / window.screen.height
+                                            )
+                                        }
+                                        className="flex flex-col justify-center items-center w-[80px] h-[64px] rounded border border-white/5
+                                                    text-white/60 hover:bg-white/5 hover:text-white transition-colors"
+                                    >
+                                        Match
+                                        <span className="text-[8px] text-white/40 mt-1">
+                                            {Math.round(window.screen.width)}×{Math.round(window.screen.height)}
+                                        </span>
+                                    </button>
+
+                                    {/* 2x2 Preset Grid */}
+                                    <div className="grid grid-cols-2 grid-rows-2 gap-1 h-[64px]">
+                                        {[
+                                            { label: "16:9", value: 1.7777 },
+                                            { label: "4:3", value: 1.3333 },
+                                            { label: "2.35", value: 2.35 },
+                                            { label: "1:1", value: 1 },
+                                        ].map((preset) => {
+                                            const active = Math.abs(aspectRatio - preset.value) < 0.01;
+                                            return (
+                                                <button
+                                                    key={preset.label}
+                                                    onClick={() =>
+                                                        useMovieStore.getState().setAspectRatio(preset.value)
+                                                    }
+                                                    className={`text-[9px] rounded border transition-colors
+                                                    ${active
+                                                            ? "bg-purple-500/20 border-purple-500/40 text-purple-200"
+                                                            : "border-white/5 text-white/50 hover:bg-white/5 hover:text-white"
+                                                        }`}
+                                                    style={{ height: 'calc(64px / 2)', width: '32px' }}
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
 
@@ -419,26 +776,22 @@ export default function Ribbon({
                             <div className="flex flex-col gap-2 min-w-[140px]">
                                 <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-auto">Action</span>
                                 <div className="flex gap-2">
+                                    {/* 4K Export — temporarily disabled (GStreamer crash on this platform) */}
                                     <button
-                                        onClick={onMakeMovie}
-                                        disabled={!isMovieMode}
-                                        className={`flex flex-col items-center justify-center h-[64px] px-4 rounded border transition-all
-                                    ${isRecording
-                                                ? "bg-red-500/20 border-red-500/50 text-red-200 animate-pulse"
-                                                : (!isMovieMode ? "opacity-30 cursor-not-allowed border-white/5" : "bg-purple-500/10 border-purple-500/30 text-purple-200 hover:bg-purple-500/20 hover:border-purple-500/50")
-                                            }`}
+                                        onClick={() =>
+                                            alert(
+                                                "4K Video export is not available in this version.\n\nThis feature is temporarily disabled due to a platform compatibility issue and will be re-enabled in a future release."
+                                            )
+                                        }
+                                        title="4K export is unavailable in this version"
+                                        className="flex flex-col items-center justify-center h-[64px] px-4 rounded border transition-all opacity-40 cursor-not-allowed border-white/5 text-white/40 relative"
                                     >
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-1">
-                                            {isRecording ? (
-                                                <rect x="6" y="6" width="12" height="12" fill="currentColor" />
-                                            ) : (
-                                                <>
-                                                    <circle cx="12" cy="12" r="10"></circle>
-                                                    <polygon points="10 8 16 12 10 16 10 8"></polygon>
-                                                </>
-                                            )}
+                                            <circle cx="12" cy="12" r="10" />
+                                            <polygon points="10 8 16 12 10 16 10 8" />
                                         </svg>
-                                        <span className="text-[10px]">{isRecording ? "STOP REC" : "Generate 4K Video"}</span>
+                                        <span className="text-[10px]">4K Video</span>
+                                        <span className="text-[8px] text-yellow-500/70 mt-0.5">Unavailable</span>
                                     </button>
 
                                     {/* Presentation Mode Button */}

@@ -54,9 +54,12 @@ export default function ColorPickerPortal({
     return createPortal(
         <div
             ref={pickerRef}
-            className="fixed z-[99999] p-3 rounded-lg bg-[#1a1a1a] border border-white/10 shadow-2xl backdrop-blur-md flex flex-col items-center gap-2"
+            id="gtoc-text-color-picker"
+            className="fixed z-[99999] p-3 rounded-lg bg-[#1a1a1a] border border-white/10 shadow-2xl backdrop-blur-md flex flex-col items-center gap-2 color-picker-portal"
             style={{ left: pos.x, top: pos.y }}
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
         >
             <HexColorPicker color={tempColor} onChange={setTempColor} />
             <div className="flex gap-2 w-full">

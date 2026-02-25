@@ -213,6 +213,9 @@ export default function InstancedBodies({
         mesh.instanceMatrix.needsUpdate = true;
     });
 
+    const togglePlanet = usePlanetStore((s) => s.togglePlanet);
+    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     // Click handler
     const handleClick = useCallback(
         (e: ThreeEvent<MouseEvent>) => {
@@ -221,15 +224,44 @@ export default function InstancedBodies({
             if (idx == null || idx >= bodies.length) return;
 
             const b = bodies[idx];
-            if (pinnedIdx === idx) {
-                setPinnedIdx(null);
-            } else {
-                setPinnedIdx(idx);
+
+            if (clickTimeoutRef.current) {
+                // Double click detected
+                clearTimeout(clickTimeoutRef.current);
+                clickTimeoutRef.current = null;
+
+                // Double click action: Center camera and ensure selected/pinned
                 setCenterBody(b.id);
+                setPinnedIdx(idx);
+                // Ensure orbit is visible (force select if not already)
+                if (!selectedBodies.includes(String(b.id)) && !selectedBodies.includes(b.name)) {
+                    togglePlanet(b.id);
+                }
+            } else {
+                // First click - wait for potential second click
+                clickTimeoutRef.current = setTimeout(() => {
+                    clickTimeoutRef.current = null;
+
+                    // Single click action: Toggle selection and pin
+                    togglePlanet(b.id);
+
+                    if (pinnedIdx === idx) {
+                        setPinnedIdx(null);
+                    } else {
+                        setPinnedIdx(idx);
+                    }
+                }, 250);
             }
         },
-        [bodies, pinnedIdx, setCenterBody]
+        [bodies, pinnedIdx, setCenterBody, togglePlanet, selectedBodies]
     );
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+        };
+    }, []);
 
     const handlePointerOver = useCallback(
         (e: ThreeEvent<PointerEvent>) => {
@@ -274,21 +306,37 @@ export default function InstancedBodies({
         []
     );
 
-    const isVisible = hoveredIdx != null || pinnedIdx != null;
-    const tooltipIdx = pinnedIdx ?? hoveredIdx;
+    // Determine which bodies need tooltips (hovered, pinned, OR selected)
+    const tooltipIndices = useMemo(() => {
+        const indices = new Set<number>();
+        if (hoveredIdx != null) indices.add(hoveredIdx);
+        if (pinnedIdx != null) indices.add(pinnedIdx);
 
-    // Determine which bodies need name labels (planets + selected, but NOT the one showing tooltip)
-    const labelIndices = useMemo(() => {
-        const out: number[] = [];
+        // Add all selected bodies
         for (let i = 0; i < bodies.length; i++) {
             const b = bodies[i];
-            const idKey = String(b.name && b.name !== "None" ? b.name : b.id);
-            const isSelected = selectedSet.has(idKey);
-            const showLabel = isSelected || b.type === "Planet";
-            if (showLabel && i !== tooltipIdx) out.push(i);
+            const idKey = String(b.id);
+            if (selectedSet.has(idKey) || selectedSet.has(b.name)) {
+                indices.add(i);
+            }
+        }
+        return Array.from(indices);
+    }, [hoveredIdx, pinnedIdx, bodies, selectedSet]);
+
+    // Determine which bodies need name labels (planets, but NOT the ones showing tooltip)
+    const labelIndices = useMemo(() => {
+        const out: number[] = [];
+        const tooltipSet = new Set(tooltipIndices);
+
+        for (let i = 0; i < bodies.length; i++) {
+            if (tooltipSet.has(i)) continue; // Skip if showing full tooltip
+
+            const b = bodies[i];
+            const showLabel = b.type === "Planet";
+            if (showLabel) out.push(i);
         }
         return out;
-    }, [bodies, selectedSet, tooltipIdx]);
+    }, [bodies, tooltipIndices]);
 
     return (
         <>
@@ -307,21 +355,31 @@ export default function InstancedBodies({
                 />
             </instancedMesh>
 
-            {/* Tooltip for hovered/pinned body */}
-            {tooltipIdx != null && tooltipIdx < bodies.length && (
+            {/* Tooltips for hovered/pinned/selected bodies */}
+            {tooltipIndices.map((idx) => (
                 <BodyTooltip
-                    body={bodies[tooltipIdx]}
-                    position={getBodyPos(tooltipIdx)}
-                    pinned={pinnedIdx === tooltipIdx}
+                    key={`tooltip-${bodies[idx].id}`}
+                    body={bodies[idx]}
+                    position={getBodyPos(idx)}
+                    pinned={pinnedIdx === idx || selectedSet.has(String(bodies[idx].id)) || selectedSet.has(bodies[idx].name)}
                     onTogglePin={() => {
-                        if (pinnedIdx === tooltipIdx) {
-                            setPinnedIdx(null);
+                        // Check if currently selected or pinned
+                        const isPinned = pinnedIdx === idx;
+                        const isSelected = selectedSet.has(String(bodies[idx].id)) || selectedSet.has(bodies[idx].name);
+
+                        // Toggle: If active (pinned/selected) -> Deactivate (Unselect/Unpin)
+                        //         If inactive -> Activate (Select/Pin)
+                        if (isPinned || isSelected) {
+                            if (isPinned) setPinnedIdx(null);
+                            if (isSelected) togglePlanet(bodies[idx].id);
                         } else {
-                            setPinnedIdx(tooltipIdx);
-                            setCenterBody(bodies[tooltipIdx].id);
+                            togglePlanet(bodies[idx].id);
+                            // Optionally set pinnedIdx too if desired, but selection is enough to show box
+                            setPinnedIdx(idx);
+                            setCenterBody(bodies[idx].id);
                         }
                     }}
-                    onCenter={() => setCenterBody(bodies[tooltipIdx].id)}
+                    onCenter={() => setCenterBody(bodies[idx].id)}
                     onPointerEnter={() => {
                         if (hoverTimeoutRef.current) {
                             clearTimeout(hoverTimeoutRef.current);
@@ -336,17 +394,18 @@ export default function InstancedBodies({
                         }, 2000);
                     }}
                 />
-            )}
+            ))}
 
-            {/* Name labels for planets and selected bodies */}
+            {/* Name labels for planets (excluding those with tooltips) */}
             {labelIndices.map((idx) => (
                 <BodyLabel
                     key={bodies[idx].id}
                     body={bodies[idx]}
                     position={getBodyPos(idx)}
-                    isSelected={selectedSet.has(String(bodies[idx].name && bodies[idx].name !== "None" ? bodies[idx].name : bodies[idx].id))}
+                    isSelected={false} // Never selected here, as selected ones get tooltips
                 />
             ))}
+
         </>
     );
 }
