@@ -15,19 +15,34 @@
 
 ## Download / Install
 
-Navigate to the `download` folder.  
-Select either the Windows/Linux installer (`GTOC_Visualizer_X.X.X_x64-setup.exe`) or the macOS one (`GTOC_Visualizer_X_X_X.zip`).
+Download the latest version from **GitHub Releases**:
 
-> [!WARNING]
-> **MacOS users:** If you see the message  
-> *“Apple can’t check app for malicious software…”*  
-> follow these steps:
-> 1. Apple menu → **System Settings** → **Privacy & Security**
-> 2. Under **Security**, click **Open**
-> 3. Click **Open Anyway**
-> 4. Enter your password, click **OK**
+<p align="center">
+  <a href="https://github.com/LuisPostigo/GTOC_visualizer/releases/latest">
+    <img src="https://img.shields.io/badge/All%20Releases-View-blue?style=for-the-badge" alt="All Releases">
+  </a>
+</p>
 
----
+### Pick your OS
 
+<p align="center">
+  <a href="https://github.com/LuisPostigo/GTOC_visualizer/releases/latest">
+    <img src="https://img.shields.io/badge/Windows-Download-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows Download">
+  </a>
+  <a href="https://github.com/LuisPostigo/GTOC_visualizer/releases/latest">
+    <img src="https://img.shields.io/badge/Linux-Download-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux Download">
+  </a>
+  <a href="https://github.com/LuisPostigo/GTOC_visualizer/releases/latest">
+    <img src="https://img.shields.io/badge/macOS-Coming%20Soon-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS Coming Soon">
+  </a>
+</p>
+
+### Files to download
+
+- **Windows:** `Vectra_*_x64-setup.exe`
+- **Linux:** `Vectra_*.AppImage` (portable), or `Vectra_*.deb` / `Vectra_*.rpm`
+- **macOS:** *Coming soon*
+
+> Tip: If you're unsure which file to pick, use **AppImage** on Linux and the **x64 installer** on Windows.
 ## Requirements
 - macOS: Supports macOS 10.13 and above
