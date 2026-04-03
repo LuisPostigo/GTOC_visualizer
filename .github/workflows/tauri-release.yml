@@ -71,12 +71,28 @@ jobs:
         run: |
           npx tauri build
 
-      - name: Upload bundles
+      - name: Collect installers
+        working-directory: "GTOC Visualizer"
+        run: |
+          mkdir -p installers
+          find src-tauri/target/release/bundle -type f \( \
+            -name "*.deb" -o \
+            -name "*.AppImage" -o \
+            -name "*.rpm" -o \
+            -name "*.msi" -o \
+            -name "*.exe" -o \
+            -name "*.dmg" -o \
+            -name "*.app.tar.gz" -o \
+            -name "*.app.tar.gz.sig" \
+          \) -exec cp {} installers/ \;
+          echo "=== Installers ==="
+          ls -lh installers/
+
+      - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
           name: Vectra-${{ matrix.os }}
-          path: |
-            GTOC Visualizer/src-tauri/target/release/bundle/**
+          path: GTOC Visualizer/installers/*
 
   release:
     name: Create GitHub Release
