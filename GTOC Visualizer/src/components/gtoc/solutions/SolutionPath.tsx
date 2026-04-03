@@ -287,9 +287,47 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
 
   // Ship position: useFrame mutates refs to avoid React re-renders each frame
   const shipGroupRef = useRef<THREE.Group>(null!);
+  const rocketMeshRef = useRef<THREE.Mesh>(null!);
 
-  // Compute ship position & visible trail via useFrame (no React state changes)
-  useFrame(() => {
+  const rocketTexture = useMemo(() => {
+    const size = 128;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.premultiplyAlpha = true;
+    tex.needsUpdate = true;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, size, size);
+
+      // Draw original SVG
+      ctx.drawImage(img, 0, 0, size, size);
+
+      // Recolor everything that has alpha to white
+      ctx.globalCompositeOperation = "source-in";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+
+      // Reset
+      ctx.globalCompositeOperation = "source-over";
+
+      tex.needsUpdate = true;
+    };
+
+    img.src = "/rocket.svg";
+    return tex;
+  }, []);
+
+  // Compute ship position & orientation via useFrame (no React state changes)
+  useFrame(({ camera }) => {
     if (pts.length < 2) return;
     const elapsedNow = (currentJD - epochZeroJD) * SECONDS_PER_DAY;
     const started = elapsedNow >= times[0];
@@ -297,6 +335,7 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
     const pos = shipPosRef.current;
     pos.copy(pts[0]);
 
+    let idx = 0;
     if (started) {
       // Binary search for current segment
       let lo = 0, hi = times.length - 2;
@@ -305,7 +344,7 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
         if (times[mid] <= elapsedNow) lo = mid;
         else hi = mid - 1;
       }
-      const idx = lo;
+      idx = lo;
       const t0 = times[idx];
       const t1 = times[idx + 1];
       const a = t1 > t0 ? Math.min(1, Math.max(0, (elapsedNow - t0) / (t1 - t0))) : 0;
@@ -314,6 +353,28 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
 
     if (shipGroupRef.current) {
       shipGroupRef.current.position.copy(pos);
+    }
+
+    // Orient rocket in direction of travel, projected onto camera plane
+    if (rocketMeshRef.current && started && pts.length > 1) {
+      // Travel direction in world space
+      const nextIdx = Math.min(idx + 1, pts.length - 1);
+      const dir3D = new THREE.Vector3().subVectors(pts[nextIdx], pts[idx]);
+      if (dir3D.lengthSq() < 1e-20 && nextIdx + 1 < pts.length) {
+        dir3D.subVectors(pts[nextIdx + 1], pts[nextIdx]);
+      }
+
+      // Project direction onto camera view plane (screen space)
+      const camRight = new THREE.Vector3();
+      const camUp = new THREE.Vector3();
+      camera.matrixWorld.extractBasis(camRight, camUp, new THREE.Vector3());
+
+      const dx = dir3D.dot(camRight);
+      const dy = dir3D.dot(camUp);
+
+      const angle = Math.atan2(dy, dx);
+      // The SVG rocket points to the top-right (≈45°), so subtract that base angle
+      rocketMeshRef.current.rotation.z = angle - Math.PI / 4;
     }
   });
 
@@ -436,7 +497,18 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
           </mesh>
 
           <Billboard follow lockX={false} lockY={false} lockZ={false}>
-            <Line points={[[0, 0.056, 0], [0.065, -0.056, 0], [-0.065, -0.056, 0], [0, 0.056, 0]]} color={baseColor} lineWidth={3} transparent opacity={1} toneMapped={false} renderOrder={20} depthTest={false} depthWrite={false} />
+            <mesh ref={rocketMeshRef} renderOrder={20}>
+              <planeGeometry args={[0.09, 0.09]} />
+              <meshBasicMaterial
+                map={rocketTexture}
+                color="#ffffff"
+                transparent
+                toneMapped={false}
+                depthTest={false}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
           </Billboard>
         </group>
       )}

@@ -233,7 +233,7 @@ export default function Ribbon({
                                     <input
                                         type="range"
                                         min="10"
-                                        max="1000"
+                                        max="1500"
                                         step="10"
                                         value={integratorSteps}
                                         onChange={(e) => setIntegratorSteps(parseInt(e.target.value))}

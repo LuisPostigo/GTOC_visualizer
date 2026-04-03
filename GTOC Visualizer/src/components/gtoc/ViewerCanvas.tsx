@@ -764,10 +764,6 @@ export default function ViewerCanvas(props: ViewerProps = {}) {
   const videoLayout = useMemo(() => {
     if (!isMovieMode) return null;
 
-    // Use a fixed reference resolution to ensure "1rem" font size 
-    // always takes up the same relative space in the video frame.
-    const REF_W = 1920;
-
     // Available space to display the movie
     const isFull = isPresentationMode || isExporting;
     const margin = isFull
@@ -777,31 +773,31 @@ export default function ViewerCanvas(props: ViewerProps = {}) {
     const availW = windowSize.w - margin.left - margin.right;
     const availH = windowSize.h - margin.top - margin.bottom;
 
-    // Determine the Effective Aspect Ratio to use for rendering
-    // 1. Exporting: Use the STRICT user-defined ratio (e.g. 16:9).
-    // 2. Presentation Mode: Use the Window/Screen ratio to fill the monitor.
-    // 3. Preview Mode (Editor): Use the Available Space ratio to fill the editor view.
-    // This makes the UI feel "Responsive" and eliminates black bars in all interactive modes,
-    // while preserving strict export dimensions.
-    let effectiveRatio = aspectRatio || 1.7777;
-
-    if (isExporting) {
-      effectiveRatio = aspectRatio || 1.7777;
-    } else if (isPresentationMode) {
-      effectiveRatio = windowSize.w / windowSize.h;
-    } else {
-      // Preview Mode: Fill the editor panel
-      effectiveRatio = availW / availH;
+    // In presentation mode, fill the entire viewport directly.
+    if (isFull) {
+      return { w: availW, h: availH };
     }
 
-    const REF_H = REF_W / effectiveRatio;
+    // Preview Mode (Editor): fit the chosen aspect ratio into the
+    // available editor space using a "contain" strategy — compute
+    // actual pixel dimensions rather than using transform: scale(),
+    // since CSS transforms don't change layout box size and cause
+    // flexbox centering to mis-position the element.
+    const targetRatio = aspectRatio || (16 / 9);
+    const availRatio = availW / availH;
 
-    // Calculate scale to fit Reference Box into Available Space (contain)
-    const scaleW = availW / REF_W;
-    const scaleH = availH / REF_H;
-    const scale = Math.min(scaleW, scaleH);
+    let w: number, h: number;
+    if (availRatio > targetRatio) {
+      // Available space is wider than target → height-constrained
+      h = availH;
+      w = h * targetRatio;
+    } else {
+      // Available space is taller than target → width-constrained
+      w = availW;
+      h = w / targetRatio;
+    }
 
-    return { w: REF_W, h: REF_H, scale, isScaled: true };
+    return { w, h };
   }, [isMovieMode, windowSize, aspectRatio, isPresentationMode, isExporting]);
 
   return (
@@ -818,8 +814,6 @@ export default function ViewerCanvas(props: ViewerProps = {}) {
                 width: videoLayout.w,
                 height: videoLayout.h,
                 flex: "none",
-                transform: `scale(${videoLayout.scale})`,
-                transformOrigin: "center center",
               }
               : {}
           }

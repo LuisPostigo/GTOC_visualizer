@@ -1,11 +1,11 @@
 {
   "name": "vectra",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "tauri": "tauri dev"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",
