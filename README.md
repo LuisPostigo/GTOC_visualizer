@@ -7,10 +7,10 @@
 >   <img src="graphics/version_1_2_0.png" alt="Version 1.2.0 Banner" width="600">
 > </p>
 > 
-> 🚀 **Rocket ship marker** that orients in the direction of travel  
-> 🪐 **Body selection** — visualize planets, asteroids, or comets interactively  
-> 🪐 **Conic arcs** using Cowell's Formulation (IVP orbit propagation)  
-> 🎬 **Movie mode** with fullscreen presentation and 4K export
+> **Rocket ship marker** that orients in the direction of travel  
+> **Body selection** — visualize planets, asteroids, or comets interactively  
+> **Conic arcs** using Cowell's Formulation (IVP orbit propagation)  
+> **Movie mode** with fullscreen presentation and 4K export
 
 ---
 
@@ -53,21 +53,17 @@ Download the latest version from **GitHub Releases**:
 
 ---
 
-### ⚠️ macOS: "Vectra is damaged and can't be opened"
-
-macOS Gatekeeper blocks apps that aren't signed with an Apple Developer certificate. This is expected for community-built releases.
-
-**To fix it**, open Terminal and run:
-
-```bash
-# If you already dragged Vectra to Applications:
-xattr -cr /Applications/Vectra.app
-
-# Or remove quarantine from the .dmg before opening:
-xattr -d com.apple.quarantine ~/Downloads/Vectra_1.2.2_aarch64.dmg
-```
-
-Alternatively, **right-click** the app and choose **Open** (instead of double-clicking). macOS will show a warning but will give you an **"Open"** button to bypass it.
+> [!WARNING]
+> macOS: "Vectra is damaged and can't be opened"
+> macOS Gatekeeper blocks apps that aren't signed with an Apple Developer certificate. This is expected for community-built releases.
+> **To fix it**, open Terminal and run:
+> ```bash
+> # If you already dragged Vectra to Applications:
+> xattr -cr /Applications/Vectra.app
+> # Or remove quarantine from the .dmg before opening:
+> xattr -d com.apple.quarantine ~/Downloads/Vectra_1.2.2_aarch64.dmg
+> ```
+> Alternatively, **right-click** the app and choose **Open** (instead of double-clicking). macOS will show a warning but will give you an **"Open"** button to bypass it.
 
 ---
 
