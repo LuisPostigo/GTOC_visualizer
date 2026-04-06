@@ -398,6 +398,26 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
     return [...pts.slice(0, idx + 1), interpPt];
   }, [pts, times, elapsed, solutionStarted]);
 
+  const visibleLegPaths = useMemo(() => {
+    return legs.map((leg) => {
+      if (elapsed < leg.t0 || leg.pts.length < 2) return null;
+      if (elapsed >= leg.t1) return leg.pts;
+
+      const legDuration = leg.t1 - leg.t0;
+      const progress = legDuration > 0 ? Math.min(1, Math.max(0, (elapsed - leg.t0) / legDuration)) : 1;
+      const totalSegments = leg.pts.length - 1;
+
+      if (totalSegments <= 0) return null;
+
+      const segmentFloat = progress * totalSegments;
+      const segmentIndex = Math.min(totalSegments - 1, Math.floor(segmentFloat));
+      const localProgress = Math.min(1, Math.max(0, segmentFloat - segmentIndex));
+      const interpPt = leg.pts[segmentIndex].clone().lerp(leg.pts[segmentIndex + 1], localProgress);
+
+      return [...leg.pts.slice(0, segmentIndex + 1), interpPt];
+    });
+  }, [elapsed, legs]);
+
   const clearHoverTimeout = () => { if (hoverTimeout.current) { clearTimeout(hoverTimeout.current); hoverTimeout.current = null; } };
 
   const handleHover = (payload: HoverPayload, pos: THREE.Vector3) => { clearHoverTimeout(); setHoverState({ data: payload, pos }); onHover?.(payload, 0, 0); };
@@ -514,12 +534,15 @@ export default function SolutionPath({ sol, currentJD, epochZeroJD, showShip, on
       )}
 
       {solutionStarted && legs.map((leg, i) => {
+        const visibleLegPts = visibleLegPaths[i];
+        if (!visibleLegPts || visibleLegPts.length < 2) return null;
+
         const isHovered = hoveredLeg === i;
         const tofDays = (leg.t1 - leg.t0) / SECONDS_PER_DAY;
         return (
           <group key={i}>
-            {isHovered && <Line points={leg.pts} color={baseColor} lineWidth={4.2} transparent opacity={0.9} toneMapped={false} />}
-            <Line points={leg.pts} color={baseColor} lineWidth={3.5} transparent opacity={0} toneMapped={false} onPointerOver={(e) => { e.stopPropagation(); setHoveredLeg(i); handleHover({ solutionName: sol.name, color: baseColor, legIndex: i + 1, fromBody: leg.fromBody, toBody: leg.toBody, tofDays, missionDays: currentJD - epochZeroJD, legDistAU: leg.dist, kind: "leg" }, e.point.clone()); }} onPointerOut={(e) => { e.stopPropagation(); setHoveredLeg(null); handleUnhover(); }} />
+            {isHovered && <Line points={visibleLegPts} color={baseColor} lineWidth={4.2} transparent opacity={0.9} toneMapped={false} />}
+            <Line points={visibleLegPts} color={baseColor} lineWidth={3.5} transparent opacity={0} toneMapped={false} onPointerOver={(e) => { e.stopPropagation(); setHoveredLeg(i); handleHover({ solutionName: sol.name, color: baseColor, legIndex: i + 1, fromBody: leg.fromBody, toBody: leg.toBody, tofDays, missionDays: currentJD - epochZeroJD, legDistAU: leg.dist, kind: "leg" }, e.point.clone()); }} onPointerOut={(e) => { e.stopPropagation(); setHoveredLeg(null); handleUnhover(); }} />
           </group>
         );
       })}

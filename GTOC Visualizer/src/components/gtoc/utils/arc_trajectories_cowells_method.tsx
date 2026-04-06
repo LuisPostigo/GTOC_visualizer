@@ -7,9 +7,30 @@
 
 import { ALTAIRA_GM } from "@/components/gtoc/utils/constants";
 
-/** Euclidean norm */
-function norm(v: number[]): number {
-  return Math.sqrt(v.reduce((acc, val) => acc + val * val, 0));
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function angleBetweenPositionStates(a: number[], b: number[]): number {
+  const na = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+  const nb = Math.sqrt(b[0] * b[0] + b[1] * b[1] + b[2] * b[2]);
+  if (!(na > 0) || !(nb > 0)) return 0;
+
+  const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  return Math.acos(clamp(dot / (na * nb), -1, 1));
+}
+
+function angularRateFromState(y: number[]): number {
+  const rx = y[0], ry = y[1], rz = y[2];
+  const vx = y[3], vy = y[4], vz = y[5];
+  const r2 = rx * rx + ry * ry + rz * rz;
+  if (!(r2 > 0)) return 0;
+
+  const hx = ry * vz - rz * vy;
+  const hy = rz * vx - rx * vz;
+  const hz = rx * vy - ry * vx;
+  const h = Math.sqrt(hx * hx + hy * hy + hz * hz);
+  return h / r2;
 }
 
 /** Two-body gravitational dynamics under central body (optimized) */
@@ -70,13 +91,24 @@ export function propagateArcCowell(
   mu: number = ALTAIRA_GM,
   samples = 40
 ): { t: number; state: number[] }[] {
-  // output times like Python: 0 .. dt, but drop the last one
-  const tEval: number[] = Array.from({ length: samples }, (_, i) =>
-    (dt * i) / (samples - 1)
-  ).slice(0, -1); // drop final dt like Python
+  if (!(dt > 0)) {
+    return [{ t: 0, state: [...r0, ...v0] }];
+  }
+
+  const targetSamples = Math.max(8, Math.floor(samples));
+  const maxOutputDt = dt / Math.max(targetSamples - 1, 1);
+
+  // Keep the global work bounded, then locally refine around fast-turning regions.
+  const baseInternalSteps = Math.max(180, targetSamples * 4);
+  const baseInternalStep = dt / baseInternalSteps;
+  const minInternalStep = dt / 8000;
+  const maxOutputAngle = Math.min(Math.PI / 24, (2 * Math.PI) / Math.max(targetSamples, 24));
+  const targetInternalAngle = Math.max(maxOutputAngle / 3, Math.PI / 720);
 
   const state = [...r0, ...v0];
-  const results: { t: number; state: number[] }[] = [];
+  const results: { t: number; state: number[] }[] = [{ t: 0, state: [...state] }];
+  let lastEmittedState = [...state];
+  let lastEmitT = 0;
 
   // Pre-allocate buffers for RK4 to avoid GC thrashing
   const k1 = new Array(6).fill(0);
@@ -86,28 +118,31 @@ export function propagateArcCowell(
   const tmp = new Array(6).fill(0);
 
   let t = 0;
-  const maxInternalStep = dt / (samples * 50);
-
-  let nextOutIndex = 0;
   const eps = 1e-10;
 
-  while (t < dt - eps && nextOutIndex < tEval.length) {
-    const targetT = tEval[nextOutIndex];
-    const h = Math.min(maxInternalStep, targetT - t);
+  while (t < dt - eps) {
+    const remaining = dt - t;
+    const omega = angularRateFromState(state);
+    const angleLimitedStep = omega > 1e-12 ? targetInternalAngle / omega : baseInternalStep;
+    const h = Math.min(
+      remaining,
+      Math.max(minInternalStep, Math.min(baseInternalStep, angleLimitedStep))
+    );
 
     // integrate one small step (optimized)
     rk4StepOptimized(state, h, mu, k1, k2, k3, k4, tmp);
     t += h;
 
-    // snap to target time if we're very close
-    if (Math.abs(t - targetT) < 1e-9) {
-      t = targetT;
-    }
+    const angleSinceLastEmit = angleBetweenPositionStates(lastEmittedState, state);
+    const shouldEmit =
+      (t - lastEmitT) >= maxOutputDt ||
+      angleSinceLastEmit >= maxOutputAngle ||
+      (dt - t) <= eps;
 
-    // if we reached or passed the output time, record it
-    if (t >= targetT - 1e-9) {
+    if (shouldEmit) {
       results.push({ t, state: [...state] });
-      nextOutIndex += 1;
+      lastEmittedState = [...state];
+      lastEmitT = t;
     }
   }
 

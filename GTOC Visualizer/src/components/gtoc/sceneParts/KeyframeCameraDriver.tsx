@@ -20,6 +20,7 @@ export function KeyframeCameraDriver({ controlsRef, jd, isPlaying = false }: Pro
     const { centerBodyId, setCenterBody, planets } = usePlanetStore();
     const { solutions } = useSolutions();
     const lastCaptureTrigger = useRef(0);
+    const lastAnimatedJD = useRef<number | null>(null);
 
     // O(1) lookup maps (rebuilt only when data changes)
     const planetMap = React.useMemo(() => {
@@ -124,7 +125,28 @@ export function KeyframeCameraDriver({ controlsRef, jd, isPlaying = false }: Pro
     });
 
     useFrame(() => {
-        if (!(isPresentationMode || isRecording || (isMovieMode && isPlaying)) || keyframes.length < 2) return;
+        const isActive = isPresentationMode || isRecording || (isMovieMode && isPlaying);
+        if (!isActive || keyframes.length < 2) {
+            lastAnimatedJD.current = jd;
+            return;
+        }
+
+        const previousJD = lastAnimatedJD.current;
+        if (previousJD !== null && previousJD !== jd) {
+            const crossed =
+                jd > previousJD
+                    ? keyframes.find((k) => k.jd > previousJD && k.jd <= jd)
+                    : [...keyframes].reverse().find((k) => k.jd < previousJD && k.jd >= jd);
+
+            if (crossed) {
+                if (centerBodyId !== crossed.centerBodyId) {
+                    setTimeout(() => setCenterBody(crossed.centerBodyId ?? null), 0);
+                }
+                lerpCamera(camera, controlsRef.current, crossed.position, crossed.target, 1);
+                lastAnimatedJD.current = jd;
+                return;
+            }
+        }
 
         // Find next keyframe
         const nextIdx = keyframes.findIndex(k => k.jd > jd);
@@ -137,6 +159,7 @@ export function KeyframeCameraDriver({ controlsRef, jd, isPlaying = false }: Pro
                 setTimeout(() => setCenterBody(k.centerBodyId ?? null), 0);
             }
             lerpCamera(camera, controlsRef.current, k.position, k.target, 1);
+            lastAnimatedJD.current = jd;
             return;
         }
 
@@ -147,6 +170,7 @@ export function KeyframeCameraDriver({ controlsRef, jd, isPlaying = false }: Pro
                 setTimeout(() => setCenterBody(k.centerBodyId ?? null), 0);
             }
             lerpCamera(camera, controlsRef.current, k.position, k.target, 1);
+            lastAnimatedJD.current = jd;
             return;
         }
 
@@ -193,6 +217,8 @@ export function KeyframeCameraDriver({ controlsRef, jd, isPlaying = false }: Pro
             controlsRef.current.target.copy(currentTgtGlobal);
             controlsRef.current.update();
         }
+
+        lastAnimatedJD.current = jd;
     });
 
     return null;
